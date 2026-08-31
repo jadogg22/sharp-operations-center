@@ -7,8 +7,8 @@ patterns; the app-specific values live in configuration, not in the files.
 | File | Used by | Parameters (in order) |
 | --- | --- | --- |
 | `lane_profitability.sql` | lane profitability report | start datetime, end datetime |
-| `sportsman_billing_dates.sql` | customer invoice quick-pick dates | customer code, start datetime, end datetime |
-| `sportsman_invoice.sql` | customer invoice review + XLSX | customer code, start datetime, end datetime |
+| `customer_billing_dates.sql` | customer invoice quick-pick dates | customer code, start datetime, end datetime |
+| `customer_invoice.sql` | customer invoice review + XLSX | customer code, start datetime, end datetime |
 | `fleet_cost_entries.sql` | fleet cost vs revenue | GL accounts (injected as `%s` list), start datetime, end datetime |
 | `fleet_revenue.sql` | fleet cost vs revenue | start datetime, end datetime |
 | `operations_manager_performance.sql` | owner overview | start datetime, end datetime |

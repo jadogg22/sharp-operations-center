@@ -17,7 +17,7 @@ SELECT
     CAST(COALESCE(s.weight, 0) AS float) AS weight,
     CAST(COALESCE(s.movement_sequence, 0) AS int) AS movement_sequence,
 
-    -- Mcloud currently stores these two values in the opposite fields.
+    -- Some operating databases store these two values in the opposite fields.
     CAST(COALESCE(s.pallets_picked_up, 0) AS int) AS pallets_dropped,
     CAST(COALESCE(s.pallets_dropped, 0) AS int) AS pallets_picked_up,
 

@@ -92,7 +92,7 @@ def fetch_customer_billing_dates(
     start_date: date, end_date: date
 ) -> list[CustomerBillingDate]:
     rows = _rows(
-        "sportsman_billing_dates.sql",
+        "customer_billing_dates.sql",
         (_customer_code(), *_bounds(start_date, end_date)),
     )
     return [
@@ -151,7 +151,7 @@ def fetch_operations_fleet_status() -> dict[str, Any]:
 
 def fetch_customer_stops(start_date: date, end_date: date) -> list[CustomerStop]:
     raw_rows = _rows(
-        "sportsman_invoice.sql",
+        "customer_invoice.sql",
         (_customer_code(), *_bounds(start_date, end_date)),
     )
     if not raw_rows:
