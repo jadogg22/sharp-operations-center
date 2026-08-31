@@ -16,6 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
+from app.config import get_settings
 from app.models import DailyRevenue, FleetCostEntry
 
 Granularity = Literal["day", "week", "month"]
@@ -27,10 +28,24 @@ class FleetCostCategory:
     label: str
 
 
-# Add future fleet-cost GL accounts here; query and output logic need no other changes.
-FLEET_COST_CATEGORIES = (
-    FleetCostCategory("FLEET_LEASE", "Fleet lease"),
-)
+# Cost categories come from configuration so the public repo stays free of
+# real GL account numbers. Demo default matches the seeded SQLite data; a
+# production .env sets the company accounts, e.g. FLEET_COST_CATEGORIES=51601000:Fleet lease
+def _load_cost_categories() -> tuple[FleetCostCategory, ...]:
+    categories: list[FleetCostCategory] = []
+    for pair in get_settings().fleet_cost_categories.split(","):
+        pair = pair.strip()
+        if not pair:
+            continue
+        account, _, label = pair.partition(":")
+        if account.strip():
+            categories.append(
+                FleetCostCategory(account.strip(), (label or account).strip())
+            )
+    return tuple(categories) or (FleetCostCategory("FLEET_LEASE", "Fleet lease"),)
+
+
+FLEET_COST_CATEGORIES = _load_cost_categories()
 
 
 def _as_date(value: date | datetime) -> date:

@@ -40,10 +40,13 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      DATA_MODE: demo
+      # Set DATA_MODE=production in a local .env (with SQL_* credentials and
+      # the sql/ query pack) to serve live data instead of the demo database.
+      DATA_MODE: ${DATA_MODE:-demo}
       DEMO_DATABASE_PATH: /app/data/sharp_demo.sqlite3
     volumes:
       - demo-data:/app/data
+      - ./sql:/app/sql:ro
     expose:
       - "8000"
     healthcheck:

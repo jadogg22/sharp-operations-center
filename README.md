@@ -6,9 +6,14 @@ I built this to replace a pile of one-off spreadsheets and reports with one
 place where our team can check the operation, review billing, and work through
 pricing decisions.
 
-This repository is the public version of that work. It runs on made-up data and
-does not include the production database adapter, company records, customer
-names, contract details, or internal deployment information.
+One codebase, two data sources, selected by `DATA_MODE` in the environment:
+
+- `demo` (default) serves a seeded SQLite database with fictional data. A fresh
+  clone runs immediately with no configuration, which is how the public
+  repository is shared.
+- `production` serves the company's read-only Mcloud SQL Server. The
+  connection settings and query pack stay out of the repository — see
+  [Demo vs production](#demo-vs-production).
 
 ## What is in it
 
@@ -45,9 +50,43 @@ The SQLite database is seeded the first time the backend starts. The names,
 routes, orders, equipment counts, and dollar amounts are fictional. They are
 there so every screen and export works after a fresh clone.
 
-In the private application, the repository layer points at a read-only
-operational data source. That adapter and its queries are intentionally not in
-this repo.
+## Demo vs production
+
+```text
+DATA_MODE=demo        DATA_MODE=production
+app/db/demo_repository.py   app/db/production_repository.py
+        \                        /
+         app/db/repository.py  (dispatcher chosen by DATA_MODE)
+```
+
+Production mode connects read-only to the Mcloud SQL Server and needs:
+
+1. A local `.env` (never committed) with the SQL settings:
+
+   ```bash
+   DATA_MODE=production
+   SQL_SERVER=...
+   SQL_DATABASE=...
+   SQL_USER=...
+   SQL_PASSWORD=...
+   # Real GL accounts for the fleet cost report:
+   FLEET_COST_CATEGORIES=51601000:Fleet lease
+   ```
+
+   `SQL_DATABASE` also accepts the legacy `SQL_DB` name, so the existing
+   go-sharpGraphs environment file works as-is without copying it:
+
+   ```bash
+   SHARP_OPERATIONS_ENV_FILE=../go-sharpGraphs/.env DATA_MODE=production \
+     uv run uvicorn app.main:app --reload
+   ```
+
+2. The query pack in `sql/` (gitignored — the queries reference the real
+   schema). See `sql/README.md` for the expected files.
+
+Docker works the same way: put those values in a `.env` beside
+`docker-compose.yml` and `docker compose up --build` serves live data; without
+them it serves the demo database.
 
 ## Run it
 
@@ -86,8 +125,9 @@ Browser
       └── FastAPI backend
           ├── overview and report services
           ├── PDF, XLSX, CSV, and PNG exporters
-          └── repository layer
-              └── SQLite demo database
+          └── repository dispatcher (DATA_MODE)
+              ├── SQLite demo database (seeded, fictional)
+              └── read-only Mcloud SQL Server (local .env + sql/ pack)
 ```
 
 The backend is Python 3.12 with FastAPI, pandas, Matplotlib, ReportLab, and
