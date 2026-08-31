@@ -13,6 +13,7 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
+from app.config import get_settings
 from app.db.connection import open_connection
 from app.models import (
     CustomerBillingDate,
@@ -25,6 +26,16 @@ from app.models import (
 SQL_DIR = Path(__file__).resolve().parents[2] / "sql"
 
 GL_ACCOUNT_TOKEN = "{{GL_ACCOUNT_PLACEHOLDERS}}"
+
+
+def _customer_code() -> str:
+    code = get_settings().customer_code.strip()
+    if not code:
+        raise RuntimeError(
+            "CUSTOMER_CODE is not set; production mode needs it for the "
+            "customer invoice queries"
+        )
+    return code
 
 
 def _query(name: str) -> str:
@@ -80,7 +91,10 @@ def fetch_lane_loads(start_date: date, end_date: date) -> list[LaneLoad]:
 def fetch_customer_billing_dates(
     start_date: date, end_date: date
 ) -> list[CustomerBillingDate]:
-    rows = _rows("sportsman_billing_dates.sql", _bounds(start_date, end_date))
+    rows = _rows(
+        "sportsman_billing_dates.sql",
+        (_customer_code(), *_bounds(start_date, end_date)),
+    )
     return [
         CustomerBillingDate(
             bill_date=row["bill_date"],
@@ -136,7 +150,10 @@ def fetch_operations_fleet_status() -> dict[str, Any]:
 
 
 def fetch_customer_stops(start_date: date, end_date: date) -> list[CustomerStop]:
-    raw_rows = _rows("sportsman_invoice.sql", _bounds(start_date, end_date))
+    raw_rows = _rows(
+        "sportsman_invoice.sql",
+        (_customer_code(), *_bounds(start_date, end_date)),
+    )
     if not raw_rows:
         return []
 

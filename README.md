@@ -59,9 +59,8 @@ app/db/demo_repository.py   app/db/production_repository.py
          app/db/repository.py  (dispatcher chosen by DATA_MODE)
 ```
 
-Production mode connects read-only to the Mcloud SQL Server and needs:
-
-1. A local `.env` (never committed) with the SQL settings:
+Production mode connects read-only to the Mcloud SQL Server and needs a local
+`.env` (never committed) with the connection settings:
 
    ```bash
    DATA_MODE=production
@@ -71,6 +70,8 @@ Production mode connects read-only to the Mcloud SQL Server and needs:
    SQL_PASSWORD=...
    # Real GL accounts for the fleet cost report:
    FLEET_COST_CATEGORIES=51601000:Fleet lease
+   # Your Mcloud customer code for the invoice queries:
+   CUSTOMER_CODE=...
    ```
 
    `SQL_DATABASE` also accepts the legacy `SQL_DB` name, so the existing
@@ -81,8 +82,9 @@ Production mode connects read-only to the Mcloud SQL Server and needs:
      uv run uvicorn app.main:app --reload
    ```
 
-2. The query pack in `sql/` (gitignored — the queries reference the real
-   schema). See `sql/README.md` for the expected files.
+The SQL query pack ships in [`sql/`](sql/) and is written to be reusable by
+other Mcloud shops — customer codes and GL accounts are configuration, never
+hard-coded.
 
 Docker works the same way: put those values in a `.env` beside
 `docker-compose.yml` and `docker compose up --build` serves live data; without

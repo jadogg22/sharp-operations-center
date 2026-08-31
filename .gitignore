@@ -1,7 +1,6 @@
 .env
 .htpasswd.local
 data/*.sqlite3
-sql/*.sql
 .venv/
 __pycache__/
 .pytest_cache/

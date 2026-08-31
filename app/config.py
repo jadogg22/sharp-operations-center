@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     sql_user: str = ""
     sql_password: str = ""
 
+    # Mcloud customer code for the invoice/billing-dates queries. Kept out of
+    # the repository so the committed query pack stays customer-agnostic.
+    customer_code: str = ""
+
     @field_validator("sql_port", mode="before")
     @classmethod
     def _blank_port_becomes_default(cls, value):
