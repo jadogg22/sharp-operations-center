@@ -1,65 +1,64 @@
 # Sharp Operations Center
 
-A full-stack trucking operations dashboard built to turn operational records
-into useful decisions, reviewable billing, and polished report artifacts.
+[![CI](https://github.com/jadogg22/sharp-operations-center/actions/workflows/ci.yml/badge.svg)](https://github.com/jadogg22/sharp-operations-center/actions/workflows/ci.yml)
 
-> **Portfolio-safe demo:** every person, customer, route, load, tractor count,
-> and financial value in this repository is synthetic. Production credentials,
-> SQL queries, customer records, and deployment details are intentionally excluded.
+I built this to replace a pile of one-off spreadsheets and reports with one
+place where our team can check the operation, review billing, and work through
+pricing decisions.
 
-## What it demonstrates
+This repository is the public version of that work. It runs on made-up data and
+does not include the production database adapter, company records, customer
+names, contract details, or internal deployment information.
 
-- An owner-facing morning brief with fleet capacity, utilization, service,
-  deadhead, revenue, manager scorecards, configurable goals, and alerts.
-- Lane-profitability PDFs with separate outbound/inbound analysis and visual
-  round-trip performance bands.
-- A multi-stop customer invoice workflow with selectable bill dates, editable
-  order charges, expected-total variance warnings, and formatted XLSX output.
-- Fleet-cost versus revenue analysis grouped by day, Sunday–Saturday week, or
-  month, with interactive charts plus CSV and PNG exports.
-- A live load-pricing calculator for deadhead, fuel surcharge, CPM, target
-  margin, and required inbound/outbound rates.
-- Request IDs, structured logs, health/readiness endpoints, tests, containers,
-  and automated dependency/build checks.
+## What is in it
 
-## Architecture
+The owner overview answers the questions that usually come up first thing in
+the morning: How many trucks are working? How much deadhead are we running? Are
+we hitting service goals? Where does somebody need to take a closer look?
 
-```text
-Browser
-  └── nginx reverse proxy
-      ├── React + Vinext frontend
-      └── FastAPI backend
-          ├── reporting services
-          ├── PDF / XLSX / CSV / PNG generators
-          └── repository interface
-              └── seeded SQLite demo database
-```
+The rest of the app covers a few jobs that used to take more manual work:
 
-The public repository is intentionally locked to `DATA_MODE=demo`. SQLite is
-seeded on first use with deterministic records covering 2025–2027. The private
-application swaps the repository implementation for a read-only enterprise data
-adapter; that implementation is not part of this project.
+- comparing outbound and inbound lane performance in a PDF;
+- reviewing a recurring multi-stop customer's charges before creating an XLSX
+  invoice;
+- comparing fleet cost with revenue by day, week, or month;
+- exporting the numbers as CSV or a chart; and
+- testing load rates against miles, deadhead, fuel surcharge, cost per mile,
+  and a target margin.
 
-## Run with Docker
+The billing workflow is deliberately anonymous. The demo shows why it exists—
+one bill date can contain several loads, and each load may visit several
+delivery locations—without identifying the customer or exposing its freight.
+
+## A note about the demo data
+
+The SQLite database is seeded the first time the backend starts. The names,
+routes, orders, equipment counts, and dollar amounts are fictional. They are
+there so every screen and export works after a fresh clone.
+
+In the private application, the repository layer points at a read-only
+operational data source. That adapter and its queries are intentionally not in
+this repo.
+
+## Run it
+
+The easiest route is Docker:
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The SQLite database is
-created automatically in the `demo-data` Docker volume.
+Then open [http://localhost:8080](http://localhost:8080).
 
-## Run for development
-
-Backend:
+For local development, start the API:
 
 ```bash
 uv sync --extra dev
 uv run uvicorn app.main:app --reload
 ```
 
-Frontend, in a second terminal:
+Then start the frontend in another terminal:
 
 ```bash
 cd frontend
@@ -67,35 +66,35 @@ npm ci
 NEXT_PUBLIC_API_URL=http://localhost:8000/api npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Useful demo dates are
-preselected in the interface; invoice billing dates are loaded from SQLite.
+The frontend will be available at [http://localhost:3000](http://localhost:3000).
 
-## Quality checks
+## How it is put together
+
+```text
+Browser
+  └── nginx
+      ├── React + TypeScript frontend
+      └── FastAPI backend
+          ├── overview and report services
+          ├── PDF, XLSX, CSV, and PNG exporters
+          └── repository layer
+              └── SQLite demo database
+```
+
+The backend is Python 3.12 with FastAPI, pandas, Matplotlib, ReportLab, and
+openpyxl. The frontend uses React, TypeScript, and Vinext. GitHub Actions runs
+the tests, lint, frontend build, and Docker build on every pull request.
+
+## Checks
 
 ```bash
-uv run pytest
 uv run ruff check app tests
+uv run pytest
 cd frontend && npm run lint && npm run build
 ```
 
-GitHub Actions runs the backend and frontend checks for every push and pull
-request. Dependabot watches both Python and npm dependencies.
-
-## Data-safety boundary
-
-The public database schema models only what the UI and report generators need.
-It is not a copy of the production schema. The repository contains no live
-database hostname, username, password, internal network address, employee name,
-customer identifier, general-ledger account, or production report output.
-
-## Tech stack
-
-Python 3.12 · FastAPI · SQLite · pandas · Matplotlib · ReportLab · openpyxl ·
-React 19 · TypeScript · Vinext · nginx · Docker Compose · GitHub Actions
-
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-The Sharp Transportation logo is displayed for portfolio context and is not
-licensed for reuse under the MIT License.
+The code is available under the [MIT License](LICENSE). The Sharp
+Transportation logo is included for project context and is not licensed for
+reuse.

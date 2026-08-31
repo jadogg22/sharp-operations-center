@@ -47,10 +47,10 @@ def customer_stop(order_id: str, movement: int) -> CustomerStop:
         destination_city="Boise",
         destination_state="ID",
         destination_zip="83702",
-        consignee="Demo Distribution",
+        consignee="Delivery Location A",
         miles=350,
         bol_number="BOL-100",
-        commodity="Sporting goods",
+        commodity="General merchandise",
         weight=12000,
         movement_sequence=movement,
         total_pallets=20,
@@ -104,10 +104,10 @@ def test_customer_workbook_has_formulas_and_layout() -> None:
     workbook = load_workbook(BytesIO(workbook_bytes), data_only=False)
     summary = workbook["Invoice Summary"]
     detail = workbook["Load Detail"]
-    assert summary["A1"].value == "CUSTOMER DISTRIBUTION BILLING"
+    assert summary["A1"].value == "MULTI-STOP CUSTOMER BILLING"
     assert summary["A11"].value == "100"
     assert summary["A12"].value.strip() == "↳ Movement 1"
-    assert summary["C12"].value == "Demo Distribution"
+    assert summary["C12"].value == "Delivery Location A"
     assert summary["D12"].value == "Boise, ID 83702"
     assert summary["J15"].value == "=SUM(K11:K13)"
     assert detail["A7"].value == "100"

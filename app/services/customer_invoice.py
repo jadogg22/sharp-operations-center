@@ -56,11 +56,11 @@ def build_customer_preview(bill_date: date, end_date: date) -> dict:
 
     if not stops:
         detail = (
-            f"No Demo Distribution loads found from {bill_date.isoformat()} "
+            f"No customer loads found from {bill_date.isoformat()} "
             f"through {end_date.isoformat()}"
             if end_date != bill_date
             else (
-                "No Demo Distribution loads found with bill date "
+                "No customer loads found with bill date "
                 f"{bill_date.isoformat()}"
             )
         )

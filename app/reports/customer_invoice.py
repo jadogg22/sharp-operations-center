@@ -105,11 +105,11 @@ def _build_summary_sheet(
     calculated_total: float,
     expected_total: float | None,
 ) -> None:
-    """Build the customer-facing summary with order and warehouse rows.
+    """Build the customer-facing summary with order and delivery-location rows.
 
     ``grouped`` supplies one bold parent row per order and its ordered movement
     rows. Charges remain on the parent row so the visible invoice total cannot
-    be accidentally multiplied by the number of warehouse stops.
+    be accidentally multiplied by the number of delivery stops.
     """
     sheet = workbook.active
     sheet.title = "Invoice Summary"
@@ -123,7 +123,7 @@ def _build_summary_sheet(
 
     _style_title(
         sheet,
-        "CUSTOMER DISTRIBUTION BILLING",
+        "MULTI-STOP CUSTOMER BILLING",
         "Portfolio demonstration  |  Synthetic customers, routes, and financial values",
         "K",
     )
@@ -178,14 +178,14 @@ def _build_summary_sheet(
     verification.alignment = Alignment(vertical="center")
 
     sheet.merge_cells("A9:K9")
-    sheet["A9"] = "REVIEWED ORDER & WAREHOUSE MOVEMENT BREAKDOWN"
+    sheet["A9"] = "REVIEWED ORDER & DELIVERY MOVEMENT BREAKDOWN"
     sheet["A9"].font = Font(name="Aptos", size=9, bold=True, color=GREEN)
     sheet["A9"].alignment = Alignment(vertical="center")
 
     headers = [
         "Order / movement",
         "Delivery / BOL",
-        "Warehouse",
+        "Delivery location",
         "City / state / ZIP",
         "Trailer",
         "Miles",
@@ -217,7 +217,7 @@ def _build_summary_sheet(
                 f"Route: {_location(first.origin_city, first.origin_state)} → "
                 f"{_location(last.destination_city, last.destination_state)}"
             ),
-            f"{len(order_stops)} warehouse stop{'s' if len(order_stops) != 1 else ''}",
+            f"{len(order_stops)} delivery stop{'s' if len(order_stops) != 1 else ''}",
             first.trailer_number,
             first.miles,
             first.total_pallets,
@@ -254,7 +254,7 @@ def _build_summary_sheet(
             movement_values = [
                 f"   ↳ Movement {stop.movement_sequence}",
                 _excel_date(stop.delivery_date),
-                stop.consignee or "Warehouse / delivery stop",
+                stop.consignee or "Delivery location",
                 destination,
                 "",
                 "",
@@ -328,7 +328,7 @@ def _build_detail_sheet(workbook: Workbook, stops: list[CustomerStop]) -> None:
     _style_title(
         sheet,
         "LOAD DETAIL",
-        "Stop-level support for the reviewed Demo Distribution invoice",
+        "Stop-level support for the reviewed customer invoice",
         "AC",
     )
 
@@ -427,7 +427,7 @@ def generate_customer_invoice(
 ) -> bytes:
     """Create the reviewed workbook and return its XLSX bytes for download."""
     if not stops:
-        raise ValueError("No Demo Distribution loads were found for this bill date")
+        raise ValueError("No customer loads were found for this bill date")
 
     calculated_total = invoice_total(stops)
     workbook = Workbook()

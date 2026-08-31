@@ -54,7 +54,7 @@ export default function CustomerReview({
 
       <div className="order-table-wrap">
         <table className="order-review-table">
-          <thead><tr><th>Use</th><th>Order / warehouse movements</th><th>BOL / trailer</th><th>Linehaul</th><th>Fuel</th><th>Accessorials</th><th>Total</th></tr></thead>
+          <thead><tr><th>Use</th><th>Order / delivery movements</th><th>BOL / trailer</th><th>Linehaul</th><th>Fuel</th><th>Accessorials</th><th>Total</th></tr></thead>
           <tbody>
             {preview.orders.map((order, index) => {
               const accessorials = order.extra_drops + order.extra_pickups + order.other_charges;
@@ -65,11 +65,11 @@ export default function CustomerReview({
                     <strong>{order.company_id ? `${order.company_id} · ` : ''}{order.order_id}</strong>
                     <small>{order.origin} → {order.destination}</small>
                     <details className="movement-preview">
-                      <summary>{order.stops.length} warehouse {order.stops.length === 1 ? 'movement' : 'movements'}</summary>
+                      <summary>{order.stops.length} delivery {order.stops.length === 1 ? 'movement' : 'movements'}</summary>
                       <ol>
                         {order.stops.map((stop) => (
                           <li key={`${stop.company_id}-${stop.order_id}-${stop.movement_sequence}`}>
-                            <b>{stop.consignee || 'Warehouse / delivery stop'}</b>
+                            <b>{stop.consignee || 'Delivery location'}</b>
                             <span>{[stop.destination_city, stop.destination_state, stop.destination_zip].filter(Boolean).join(', ')}</span>
                           </li>
                         ))}

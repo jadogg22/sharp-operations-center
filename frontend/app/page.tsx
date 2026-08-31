@@ -15,7 +15,7 @@ import type { BillingDateResponse, FleetPreview, PreviewOrder, ReportKind, Custo
 const reports = {
   overview: { eyebrow: 'Morning operations', title: 'Owner overview', description: 'See fleet capacity, manager performance, service risks, and today’s operational exceptions in one briefing.', button: 'View briefing', format: 'AUG 28' },
   lane: { eyebrow: 'Operations intelligence', title: 'Lane profitability', description: 'Compare outbound and inbound performance, trip volume, empty miles, and lane quality across a selected period.', button: 'Generate PDF report', format: 'PDF' },
-  customer: { eyebrow: 'Customer billing', title: 'Customer invoice', description: 'Choose a recent billing day or enter a custom period, review every charge, and export a verified billing workbook.', button: 'Review billed loads', format: 'XLSX' },
+  customer: { eyebrow: 'Contract billing', title: 'Multi-stop customer invoice', description: 'Choose a billing day, review each load and delivery location, then export a verified workbook.', button: 'Review billed loads', format: 'XLSX' },
   fleet: { eyebrow: 'Owner economics', title: 'Fleet cost vs revenue', description: 'Compare operating revenue with fleet cost by day, Sunday–Saturday week, or calendar month.', button: 'Build cost view', format: 'CSV + CHART' },
   pricing: { eyebrow: 'Sales planning', title: 'Load pricing builder', description: 'Test CPM, mileage, and both loaded rates together to find a target that covers the round trip and your margin.', button: 'Adjust assumptions', format: 'LIVE TOOL' },
 } as const;

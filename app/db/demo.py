@@ -92,9 +92,9 @@ def _seed(connection: sqlite3.Connection) -> None:
         )
 
     invoice_orders = (
-        ("2001", ("Salt Lake City", "UT", "84104"), (("Boise", "ID", "83705", "North Warehouse", 12), ("Nampa", "ID", "83687", "West Warehouse", 8)), 1_250, 315, 420),
-        ("2002", ("Ogden", "UT", "84404"), (("Reno", "NV", "89502", "Central Warehouse", 18),), 1_480, 370, 525),
-        ("2003", ("Provo", "UT", "84601"), (("Las Vegas", "NV", "89115", "South Warehouse", 10), ("Henderson", "NV", "89011", "East Warehouse", 6)), 1_390, 345, 445),
+        ("2001", ("Salt Lake City", "UT", "84104"), (("Boise", "ID", "83705", "Delivery Location A", 12), ("Nampa", "ID", "83687", "Delivery Location B", 8)), 1_250, 315, 420),
+        ("2002", ("Ogden", "UT", "84404"), (("Reno", "NV", "89502", "Delivery Location C", 18),), 1_480, 370, 525),
+        ("2003", ("Provo", "UT", "84601"), (("Las Vegas", "NV", "89115", "Delivery Location D", 10), ("Henderson", "NV", "89011", "Delivery Location E", 6)), 1_390, 345, 445),
     )
     for bill_date in (date(2026, 8, 24), date(2026, 8, 27)):
         for order_id, origin, stops, freight, fuel, miles in invoice_orders:
