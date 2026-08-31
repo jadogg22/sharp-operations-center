@@ -123,7 +123,7 @@ def _build_summary_sheet(
 
     _style_title(
         sheet,
-        "MULTI-STOP CUSTOMER BILLING",
+        "CUSTOMER DISTRIBUTION BILLING",
         "Portfolio demonstration  |  Synthetic customers, routes, and financial values",
         "K",
     )
@@ -178,14 +178,14 @@ def _build_summary_sheet(
     verification.alignment = Alignment(vertical="center")
 
     sheet.merge_cells("A9:K9")
-    sheet["A9"] = "REVIEWED ORDER & DELIVERY MOVEMENT BREAKDOWN"
+    sheet["A9"] = "REVIEWED ORDER & WAREHOUSE MOVEMENT BREAKDOWN"
     sheet["A9"].font = Font(name="Aptos", size=9, bold=True, color=GREEN)
     sheet["A9"].alignment = Alignment(vertical="center")
 
     headers = [
         "Order / movement",
         "Delivery / BOL",
-        "Delivery location",
+        "Warehouse",
         "City / state / ZIP",
         "Trailer",
         "Miles",
@@ -217,7 +217,7 @@ def _build_summary_sheet(
                 f"Route: {_location(first.origin_city, first.origin_state)} → "
                 f"{_location(last.destination_city, last.destination_state)}"
             ),
-            f"{len(order_stops)} delivery stop{'s' if len(order_stops) != 1 else ''}",
+            f"{len(order_stops)} warehouse stop{'s' if len(order_stops) != 1 else ''}",
             first.trailer_number,
             first.miles,
             first.total_pallets,
@@ -254,7 +254,7 @@ def _build_summary_sheet(
             movement_values = [
                 f"   ↳ Movement {stop.movement_sequence}",
                 _excel_date(stop.delivery_date),
-                stop.consignee or "Delivery location",
+                stop.consignee or "Warehouse / delivery stop",
                 destination,
                 "",
                 "",

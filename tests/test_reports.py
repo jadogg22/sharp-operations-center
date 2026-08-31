@@ -104,7 +104,7 @@ def test_customer_workbook_has_formulas_and_layout() -> None:
     workbook = load_workbook(BytesIO(workbook_bytes), data_only=False)
     summary = workbook["Invoice Summary"]
     detail = workbook["Load Detail"]
-    assert summary["A1"].value == "MULTI-STOP CUSTOMER BILLING"
+    assert summary["A1"].value == "CUSTOMER DISTRIBUTION BILLING"
     assert summary["A11"].value == "100"
     assert summary["A12"].value.strip() == "↳ Movement 1"
     assert summary["C12"].value == "Delivery Location A"
