@@ -40,10 +40,13 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      # Set DATA_MODE=production in a local .env (with SQL_* credentials and
-      # the sql/ query pack) to serve live data instead of the demo database.
+      # .env beside docker-compose.yml feeds both compose interpolation and the
+      # backend container. With DATA_MODE=production plus SQL_* credentials and
+      # FLEET_COST_CATEGORIES it serves live data; otherwise the demo database.
       DATA_MODE: ${DATA_MODE:-demo}
       DEMO_DATABASE_PATH: /app/data/sharp_demo.sqlite3
+    env_file:
+      - .env
     volumes:
       - demo-data:/app/data
       - ./sql:/app/sql:ro
