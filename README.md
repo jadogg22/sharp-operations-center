@@ -16,6 +16,8 @@ The owner overview answers the questions that usually come up first thing in
 the morning: How many trucks are working? How much deadhead are we running? Are
 we hitting service goals? Where does somebody need to take a closer look?
 
+![Owner overview running with synthetic fleet data](docs/images/owner-overview.png)
+
 The rest of the app covers a few jobs that used to take more manual work:
 
 - comparing outbound and inbound lane performance in a PDF;
@@ -26,9 +28,16 @@ The rest of the app covers a few jobs that used to take more manual work:
 - testing load rates against miles, deadhead, fuel surcharge, cost per mile,
   and a target margin.
 
+The pricing builder turns those inputs into a return-load target while keeping
+the assumptions visible to the person quoting the load.
+
+![Load pricing builder with fictional rates and mileage](docs/images/load-pricing-builder.png)
+
 The billing workflow is deliberately anonymous. The demo shows why it exists—
 one bill date can contain several loads, and each load may visit several
 delivery locations—without identifying the customer or exposing its freight.
+
+![Anonymous invoice review using fictional orders](docs/images/invoice-review.png)
 
 ## A note about the demo data
 
