@@ -141,14 +141,16 @@ def fetch_vacation_balances() -> list[VacationBalance]:
     result: list[VacationBalance] = []
     for company_id in companies:
         employee_group = "drivers" if company_id.lower() == "drivers" else "office"
+        query_company_id = "TMS" if employee_group == "drivers" else company_id
         rows = _rows(
             "employee_vacation.sql",
             (
-                company_id,
+                query_company_id,
                 employee_group,
                 employee_group,
                 employee_group,
-                company_id,
+                employee_group,
+                query_company_id,
                 employee_group,
                 employee_group,
             ),
@@ -158,7 +160,7 @@ def fetch_vacation_balances() -> list[VacationBalance]:
             hours = float(row["vacation_hours_due"]) if row["vacation_hours_due"] is not None else None
             amount = ((rate / 80) * hours if rate > 100 else rate * hours) if rate is not None and hours is not None else 0.0
             result.append(VacationBalance(
-                company_id=str(row["company_id"]),
+                company_id=company_id,
                 employee_group=str(row["employee_group"]),
                 employee_id=str(row["employee_id"]),
                 employee_name=str(row["employee_name"]),
