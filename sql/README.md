@@ -14,6 +14,7 @@ patterns; the app-specific values live in configuration, not in the files.
 | `operations_manager_performance.sql` | owner overview | start datetime, end datetime |
 | `operations_tractors.sql` | owner overview | none |
 | `operations_fleet_status.sql` | owner overview | none |
+| `employee_vacation.sql` | vacation balance report | company and employee-group parameters |
 
 Conventions:
 

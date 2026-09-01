@@ -46,6 +46,11 @@ CREATE TABLE IF NOT EXISTS fleet_status (
     seated_tractors INTEGER, dispatch_ready INTEGER, ready_to_seat INTEGER,
     out_of_service INTEGER, special_hold INTEGER
 );
+CREATE TABLE IF NOT EXISTS vacation_balances (
+    company_id TEXT, employee_group TEXT, employee_id TEXT,
+    employee_name TEXT, vacation_hours_due REAL, vacation_pay_rate REAL,
+    amount_due REAL
+);
 """
 
 MANAGERS = (
@@ -67,7 +72,38 @@ def connect() -> sqlite3.Connection:
     connection.executescript(SCHEMA)
     if connection.execute("SELECT COUNT(*) FROM lane_loads").fetchone()[0] == 0:
         _seed(connection)
+    if connection.execute("SELECT COUNT(*) FROM vacation_balances").fetchone()[0] == 0:
+        _seed_vacation(connection)
     return connection
+
+
+def _seed_vacation(connection: sqlite3.Connection) -> None:
+    """Add fictional balances that exercise driver and office employee views."""
+    rows = (
+        ("TMS", "Drivers", "D-1001", "Sam Carter", 42.5, 31.50),
+        ("TMS", "Drivers", "D-1002", "Jamie Morgan", 18.0, 29.75),
+        ("TMS2", "Office", "O-2001", "Alex Parker", 64.0, 28.00),
+        ("TMS2", "Office", "O-2002", "Casey Ellis", 12.5, 34.50),
+        ("TMS3", "Office", "O-3001", "Taylor Reed", 80.0, 125.00),
+        ("TMS3", "Office", "O-3002", "Jordan Hayes", 37.0, 27.25),
+        ("TMS4", "Office", "O-4001", "Morgan Lee", None, 30.00),
+        ("TMS4", "Office", "O-4002", "Riley Bell", 22.0, None),
+        ("DRIVERS", "Drivers", "D-5001", "Drew Foster", 55.0, 1_240.00),
+        ("DRIVERS", "Drivers", "D-5002", "Robin Wells", 9.5, 1_180.00),
+    )
+    connection.executemany(
+        "INSERT INTO vacation_balances VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                *row,
+                round((row[4] or 0) * row[5], 2)
+                if row[4] is not None and row[5] is not None
+                else 0,
+            )
+            for row in rows
+        ],
+    )
+    connection.commit()
 
 
 def _seed(connection: sqlite3.Connection) -> None:

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # Mcloud customer code for the invoice/billing-dates queries. Kept out of
     # the repository so the committed query pack stays customer-agnostic.
     customer_code: str = ""
+    vacation_companies: str = "TMS,TMS2,TMS3,TMS4,drivers"
 
     @field_validator("sql_port", mode="before")
     @classmethod

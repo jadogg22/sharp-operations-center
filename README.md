@@ -29,7 +29,8 @@ The rest of the app covers a few jobs that used to take more manual work:
 - reviewing a recurring multi-stop customer's charges before creating an XLSX
   invoice;
 - comparing fleet cost with revenue by day, week, or month;
-- exporting the numbers as CSV or a chart; and
+- exporting the numbers as CSV or a chart;
+- reviewing current employee vacation balances and estimated payout; and
 - testing load rates against miles, deadhead, fuel surcharge, cost per mile,
   and a target margin.
 

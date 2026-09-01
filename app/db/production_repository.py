@@ -21,6 +21,7 @@ from app.models import (
     DailyRevenue,
     FleetCostEntry,
     LaneLoad,
+    VacationBalance,
 )
 
 SQL_DIR = Path(__file__).resolve().parents[2] / "sql"
@@ -129,6 +130,43 @@ def fetch_daily_revenue(start_date: date, end_date: date) -> list[DailyRevenue]:
         )
         for row in rows
     ]
+
+
+def fetch_vacation_balances() -> list[VacationBalance]:
+    """Fetch vacation balances for configured driver and office companies."""
+    settings = get_settings()
+    companies = tuple(
+        value.strip() for value in settings.vacation_companies.split(",") if value.strip()
+    )
+    result: list[VacationBalance] = []
+    for company_id in companies:
+        employee_group = "drivers" if company_id.lower() == "drivers" else "office"
+        rows = _rows(
+            "employee_vacation.sql",
+            (
+                company_id,
+                employee_group,
+                employee_group,
+                employee_group,
+                company_id,
+                employee_group,
+                employee_group,
+            ),
+        )
+        for row in rows:
+            rate = float(row["vacation_pay_rate"]) if row["vacation_pay_rate"] is not None else None
+            hours = float(row["vacation_hours_due"]) if row["vacation_hours_due"] is not None else None
+            amount = ((rate / 80) * hours if rate > 100 else rate * hours) if rate is not None and hours is not None else 0.0
+            result.append(VacationBalance(
+                company_id=str(row["company_id"]),
+                employee_group=str(row["employee_group"]),
+                employee_id=str(row["employee_id"]),
+                employee_name=str(row["employee_name"]),
+                vacation_hours_due=hours,
+                vacation_pay_rate=rate,
+                amount_due=round(amount, 2),
+            ))
+    return sorted(result, key=lambda item: (-item.amount_due, item.employee_name))
 
 
 def fetch_operations_performance(

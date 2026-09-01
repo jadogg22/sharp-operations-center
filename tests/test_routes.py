@@ -139,6 +139,8 @@ def test_public_report_routes_are_preserved() -> None:
     assert "/api/reports/fleet-cost-revenue/preview" in paths
     assert "/api/reports/fleet-cost-revenue.csv" in paths
     assert "/api/reports/fleet-cost-revenue.png" in paths
+    assert "/api/reports/vacation/preview" in paths
+    assert "/api/reports/vacation.csv" in paths
     assert "/api/overview" in paths
 
 

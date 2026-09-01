@@ -198,6 +198,23 @@ button { color: inherit; }
 .detail-number { color: #adb6af; font-family: monospace; font-size: 11px; }
 .details-row h3 { margin: 0 0 5px; font-size: 12px; }
 .details-row p { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.vacation-card { margin-top: 38px; overflow: hidden; border: 1px solid #c4ccd4; border-radius: 8px; background: white; box-shadow: 0 6px 16px rgba(18, 26, 35, 0.055); }
+.vacation-card .card-heading { justify-content: space-between; gap: 20px; padding: 22px 24px; border-bottom: 1px solid #dde2e6; }
+.vacation-card h2 { margin: 6px 0 0; font-size: 20px; letter-spacing: -0.03em; }
+.vacation-card .report-message { margin: 20px 24px; }
+.vacation-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; border-bottom: 1px solid #dde2e6; background: #dde2e6; }
+.vacation-summary div { display: grid; gap: 7px; padding: 18px 22px; background: #f6f8f9; }
+.vacation-summary span { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.vacation-summary strong { color: var(--green); font-size: 23px; letter-spacing: -0.04em; }
+.vacation-table-wrap { overflow-x: auto; }
+.vacation-table { width: 100%; min-width: 650px; border-collapse: collapse; }
+.vacation-table th { padding: 11px 18px; background: #1b2c3c; color: #d8e0e7; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-align: right; text-transform: uppercase; }
+.vacation-table th:first-child, .vacation-table th:nth-child(2) { text-align: left; }
+.vacation-table td { padding: 13px 18px; border-bottom: 1px solid #e7ebe7; font-size: 12px; text-align: right; }
+.vacation-table td:first-child, .vacation-table td:nth-child(2) { text-align: left; }
+.vacation-table tbody tr:nth-child(even) { background: #f8faf7; }
+.vacation-table td strong, .vacation-table td small { display: block; }
+.vacation-table td small { margin-top: 4px; color: var(--muted); font-size: 9px; }
 .owner-overview { margin-top: 38px; }
 .briefing-banner { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 28px; min-height: 158px; padding: 28px 30px; border: 1px solid #314457; border-radius: 9px; overflow: hidden; background: linear-gradient(132deg, #111a23 0%, #1a334c 65%, #244f77 100%); color: white; box-shadow: 0 11px 26px rgba(16, 25, 34, 0.2); }
 .briefing-banner::after { position: absolute; right: -28px; bottom: -120px; width: 120px; height: 340px; border-right: 24px solid rgba(223, 107, 32, 0.25); border-left: 8px solid rgba(255, 255, 255, 0.07); content: ''; transform: rotate(16deg); }

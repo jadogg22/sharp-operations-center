@@ -40,6 +40,19 @@ class DailyRevenue:
 
 
 @dataclass(frozen=True)
+class VacationBalance:
+    """Current vacation balance and estimated payout for one employee."""
+
+    company_id: str
+    employee_group: str
+    employee_id: str
+    employee_name: str
+    vacation_hours_due: float | None
+    vacation_pay_rate: float | None
+    amount_due: float
+
+
+@dataclass(frozen=True)
 class CustomerStop:
     order_id: str
     ordered_date: date | datetime | None

@@ -20,6 +20,7 @@ from app.models import (
     DailyRevenue,
     FleetCostEntry,
     LaneLoad,
+    VacationBalance,
 )
 
 
@@ -61,6 +62,12 @@ def fetch_daily_revenue(start_date: date, end_date: date) -> list[DailyRevenue]:
     if _is_production():
         return production_repository.fetch_daily_revenue(start_date, end_date)
     return demo_repository.fetch_daily_revenue(start_date, end_date)
+
+
+def fetch_vacation_balances() -> list[VacationBalance]:
+    if _is_production():
+        return production_repository.fetch_vacation_balances()
+    return demo_repository.fetch_vacation_balances()
 
 
 def fetch_operations_performance(

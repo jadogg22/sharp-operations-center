@@ -1,6 +1,6 @@
 import type { FleetGranularity, FleetPeriod } from './components/FleetPerformanceChart';
 
-export type ReportKind = 'overview' | 'lane' | 'customer' | 'fleet' | 'pricing';
+export type ReportKind = 'overview' | 'lane' | 'customer' | 'fleet' | 'vacation' | 'pricing';
 
 export type FleetPreview = {
   start_date: string;

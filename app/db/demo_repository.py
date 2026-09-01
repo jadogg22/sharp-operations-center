@@ -10,6 +10,7 @@ from app.models import (
     DailyRevenue,
     FleetCostEntry,
     LaneLoad,
+    VacationBalance,
 )
 
 
@@ -106,6 +107,15 @@ def fetch_daily_revenue(start_date: date, end_date: date) -> list[DailyRevenue]:
         DailyRevenue(**{**row, "revenue_date": _date_value(row["revenue_date"])})
         for row in rows
     ]
+
+
+def fetch_vacation_balances() -> list[VacationBalance]:
+    rows = _rows(
+        """SELECT company_id, employee_group, employee_id, employee_name,
+                  vacation_hours_due, vacation_pay_rate, amount_due
+           FROM vacation_balances ORDER BY employee_group, amount_due DESC, employee_name"""
+    )
+    return [VacationBalance(**row) for row in rows]
 
 
 def fetch_operations_performance(start_date: date, end_date: date) -> list[dict[str, Any]]:
