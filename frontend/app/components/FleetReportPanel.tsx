@@ -29,12 +29,30 @@ export default function FleetReportPanel({ preview, granularity, loading, money,
 
       <div className="fleet-summary">
         <div><span>Revenue</span><strong>{money.format(preview.summary.revenue)}</strong><small>{preview.summary.order_count.toLocaleString()} orders</small></div>
-        <div><span>Allocated fleet cost</span><strong>{money.format(preview.summary.allocated_fleet_cost)}</strong><small>GL {preview.cost_categories.map((category) => category.gl_account).join(', ')}</small></div>
+        <div><span>Allocated stacked cost</span><strong>{money.format(preview.summary.allocated_fleet_cost)}</strong><small>{preview.cost_categories.length} verified GL {preview.cost_categories.length === 1 ? 'account' : 'accounts'}</small></div>
         <div><span>Revenue after fleet cost</span><strong>{money.format(preview.summary.revenue_after_fleet_cost)}</strong><small>Before all other expenses</small></div>
         <div><span>Fleet cost / revenue</span><strong>{preview.summary.fleet_cost_pct_revenue === null ? '—' : percent.format(preview.summary.fleet_cost_pct_revenue)}</strong><small>{preview.summary.revenue_per_fleet_cost === null ? 'No fleet cost' : `${money.format(preview.summary.revenue_per_fleet_cost)} revenue per $1`}</small></div>
       </div>
 
-      <FleetPerformanceChart periods={preview.periods} granularity={preview.granularity} />
+      <div className="fleet-cost-stack">
+        <div className="fleet-cost-stack-heading"><div><span>Selected cost stack</span><strong>Source-month account totals</strong></div><small>These account totals are prorated into the exact dates shown below.</small></div>
+        <div className="fleet-cost-stack-grid">
+          {preview.cost_categories.map((category, index) => (
+            <article key={category.gl_account}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <div><strong>{category.label}</strong><small>GL {category.gl_account}</small></div>
+              <b>{money.format(category.source_amount)}</b>
+            </article>
+          ))}
+          <article className="fleet-cost-stack-total"><span>Σ</span><div><strong>Combined source cost</strong><small>All selected accounts</small></div><b>{money.format(preview.summary.source_fleet_cost)}</b></article>
+        </div>
+      </div>
+
+      <FleetPerformanceChart
+        periods={preview.periods}
+        granularity={preview.granularity}
+        costCategories={preview.cost_categories}
+      />
 
       <div className="fleet-table-wrap">
         <table className="fleet-table">

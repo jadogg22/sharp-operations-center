@@ -1,8 +1,9 @@
 'use client';
 
 import type { FormEvent } from 'react';
-import type { BillingDateResponse, ReportKind } from '../reportTypes';
+import type { BillingDateResponse, FleetCostAccount, ReportKind } from '../reportTypes';
 import type { FleetGranularity } from './FleetPerformanceChart';
+import FleetAccountPicker from './FleetAccountPicker';
 
 type ReportMeta = { button: string };
 
@@ -17,6 +18,9 @@ type Props = {
   billingDates: BillingDateResponse | null;
   billingDatesLoading: boolean;
   fleetGranularity: FleetGranularity;
+  fleetAccounts: FleetCostAccount[];
+  apiBase: string;
+  revenueAccessPassword: string;
   loading: boolean;
   previewExists: boolean;
   error: string;
@@ -29,6 +33,8 @@ type Props = {
   handlePrimaryAction: (event: FormEvent<HTMLFormElement>) => void;
   selectBillingDate: (billDate: string) => void;
   changeFleetGranularity: (granularity: FleetGranularity) => void;
+  changeFleetAccounts: (accounts: FleetCostAccount[]) => void;
+  onRevenueAccessDenied: () => void;
 };
 
 export default function ReportGenerator({
@@ -42,6 +48,9 @@ export default function ReportGenerator({
   billingDates,
   billingDatesLoading,
   fleetGranularity,
+  fleetAccounts,
+  apiBase,
+  revenueAccessPassword,
   loading,
   previewExists,
   error,
@@ -54,6 +63,8 @@ export default function ReportGenerator({
   handlePrimaryAction,
   selectBillingDate,
   changeFleetGranularity,
+  changeFleetAccounts,
+  onRevenueAccessDenied,
 }: Props) {
   return (
     <form className="generator-card" aria-labelledby="generator-title" onSubmit={handlePrimaryAction}>
@@ -69,7 +80,7 @@ export default function ReportGenerator({
             <small>Selecting a date opens its review immediately.</small>
           </div>
           <div className="billing-date-options">
-            {billingDatesLoading && <span className="billing-date-empty">Checking demo billing records…</span>}
+            {billingDatesLoading && <span className="billing-date-empty">Checking billing records…</span>}
             {!billingDatesLoading && billingDates?.dates.map((option) => (
               <button className={startDate === option.bill_date && !invoiceEndDate ? 'billing-date-option selected' : 'billing-date-option'} type="button" key={option.bill_date} onClick={() => selectBillingDate(option.bill_date)} disabled={loading}>
                 <strong>{new Date(`${option.bill_date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</strong>
@@ -94,8 +105,10 @@ export default function ReportGenerator({
         {activeReport === 'fleet' && <fieldset className="granularity-field"><legend>Group results by</legend><div className="segmented-control">{(['day', 'week', 'month'] as const).map((granularity) => <button type="button" key={granularity} aria-pressed={fleetGranularity === granularity} onClick={() => changeFleetGranularity(granularity)} disabled={loading}>{granularity === 'day' ? 'Days' : granularity === 'week' ? 'Weeks' : 'Months'}</button>)}</div></fieldset>}
       </div>
 
+      {activeReport === 'fleet' && <FleetAccountPicker apiBase={apiBase} accounts={fleetAccounts} disabled={loading} accessPassword={revenueAccessPassword} onChange={changeFleetAccounts} onAccessDenied={onRevenueAccessDenied} />}
+
       <div className="card-footer">
-        <p>{activeReport === 'lane' && 'The report groups Utah outbound and inbound lanes for the selected period.'}{activeReport === 'customer' && 'Leave the end date blank for one billing day, or add it to review a billing period.'}{activeReport === 'fleet' && 'Select any date range and switch between daily, Sunday–Saturday weekly, or monthly views.'}</p>
+        <p>{activeReport === 'lane' && 'The report groups Utah outbound and inbound lanes for the selected period.'}{activeReport === 'customer' && 'Leave the end date blank for one billing day, or add it to review a billing period.'}{activeReport === 'fleet' && 'Selected GL accounts remain separate chart segments while adding into one cost total. Switch between daily, Sunday–Saturday weekly, or monthly views.'}</p>
         <button className="primary-button" type="submit" disabled={loading}>{loading ? 'Working…' : previewExists && activeReport === 'customer' ? 'Refresh billed loads' : report.button}<span aria-hidden="true">→</span></button>
       </div>
       {(error || success) && <div className={error ? 'report-message error' : 'report-message success'} role="status">{error || success}</div>}

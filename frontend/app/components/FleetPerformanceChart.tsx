@@ -4,6 +4,18 @@ import { useMemo, useState } from 'react';
 
 export type FleetGranularity = 'day' | 'week' | 'month';
 
+export type FleetCostCategory = {
+  gl_account: string;
+  label: string;
+  source_amount: number;
+};
+
+export type FleetCostBreakdown = {
+  gl_account: string;
+  label: string;
+  allocated_amount: number;
+};
+
 export type FleetPeriod = {
   label: string;
   bucket_start: string;
@@ -14,6 +26,7 @@ export type FleetPeriod = {
   order_count: number;
   revenue: number;
   allocated_fleet_cost: number;
+  cost_breakdown: FleetCostBreakdown[];
   revenue_after_fleet_cost: number;
   fleet_cost_pct_revenue: number | null;
   revenue_per_fleet_cost: number | null;
@@ -22,7 +35,21 @@ export type FleetPeriod = {
 type FleetPerformanceChartProps = {
   periods: FleetPeriod[];
   granularity: FleetGranularity;
+  costCategories: FleetCostCategory[];
 };
+
+const COST_COLORS = [
+  '#df6b20',
+  '#c7902f',
+  '#60788f',
+  '#8a5a44',
+  '#8397a8',
+  '#b85a3b',
+  '#3e668d',
+  '#a8835c',
+];
+
+const costColor = (index: number) => COST_COLORS[index % COST_COLORS.length];
 
 const money = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -41,7 +68,7 @@ const compactMoney = (value: number) => {
   return `$${Math.round(value)}`;
 };
 
-export default function FleetPerformanceChart({ periods, granularity }: FleetPerformanceChartProps) {
+export default function FleetPerformanceChart({ periods, granularity, costCategories }: FleetPerformanceChartProps) {
   // The API provides one normalized period shape; this component only changes
   // presentation based on the selected day/week/month grouping.
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -122,7 +149,12 @@ export default function FleetPerformanceChart({ periods, granularity }: FleetPer
         </div>
         <div className="chart-legend" aria-label="Chart legend">
           <span><i className="legend-revenue" />Revenue</span>
-          <span><i className="legend-cost" />Fleet cost</span>
+          {costCategories.map((category, index) => (
+            <span key={category.gl_account}>
+              <i style={{ backgroundColor: costColor(index) }} />
+              {category.label}
+            </span>
+          ))}
           <span><i className="legend-ratio" />Cost / revenue</span>
         </div>
       </div>
@@ -134,6 +166,15 @@ export default function FleetPerformanceChart({ periods, granularity }: FleetPer
         <div><span>After fleet cost</span><strong>{money.format(active.revenue_after_fleet_cost)}</strong></div>
         <div><span>Cost / revenue</span><strong>{active.fleet_cost_pct_revenue === null ? '—' : percent.format(active.fleet_cost_pct_revenue)}</strong></div>
       </div>
+      <div className="chart-cost-breakdown" aria-label={`Fleet cost breakdown for ${active.label}`}>
+        {active.cost_breakdown.map((item, index) => (
+          <span key={item.gl_account}>
+            <i style={{ backgroundColor: costColor(index) }} />
+            <small>{item.label}</small>
+            <strong>{money.format(item.allocated_amount)}</strong>
+          </span>
+        ))}
+      </div>
 
       <div className="chart-scroll" role="region" aria-label={`${viewLabel} fleet cost versus revenue chart`}>
         <svg
@@ -144,7 +185,7 @@ export default function FleetPerformanceChart({ periods, granularity }: FleetPer
           aria-labelledby="fleet-chart-title fleet-chart-description"
         >
           <title id="fleet-chart-title">{viewLabel} fleet cost versus revenue</title>
-          <desc id="fleet-chart-description">Revenue and allocated fleet cost are bars. Fleet cost as a percentage of revenue is a line. Hover or focus a period for exact values.</desc>
+          <desc id="fleet-chart-description">Revenue is a blue bar. Each fleet cost account is a different colored segment in the adjacent stacked bar. Fleet cost as a percentage of revenue is a line. Hover or focus a period for exact values.</desc>
 
           {moneyTicks.map((tick) => {
             const y = geometry.margin.top + geometry.plotHeight * (1 - tick);
@@ -160,8 +201,22 @@ export default function FleetPerformanceChart({ periods, granularity }: FleetPer
           {periods.map((period, index) => {
             const center = geometry.x(index);
             const revenueY = geometry.moneyY(period.revenue);
-            const costY = geometry.moneyY(period.allocated_fleet_cost);
             const isActive = index === activeIndex;
+            let cumulativeCost = 0;
+            const costSegments = period.cost_breakdown.map((item, categoryIndex) => {
+              const segmentBottom = geometry.moneyY(cumulativeCost);
+              cumulativeCost += item.allocated_amount;
+              const segmentTop = geometry.moneyY(cumulativeCost);
+              return {
+                ...item,
+                y: segmentTop,
+                height: Math.max(0, segmentBottom - segmentTop),
+                color: costColor(categoryIndex),
+              };
+            });
+            const accessibleBreakdown = period.cost_breakdown
+              .map((item) => `${item.label} ${money.format(item.allocated_amount)}`)
+              .join(', ');
             return (
               <g
                 key={`${period.bucket_start}-${granularity}`}
@@ -169,11 +224,21 @@ export default function FleetPerformanceChart({ periods, granularity }: FleetPer
                 tabIndex={0}
                 onMouseEnter={() => setActiveKey(period.bucket_start)}
                 onFocus={() => setActiveKey(period.bucket_start)}
-                aria-label={`${period.label}: ${money.format(period.revenue)} revenue, ${money.format(period.allocated_fleet_cost)} fleet cost`}
+                aria-label={`${period.label}: ${money.format(period.revenue)} revenue, ${money.format(period.allocated_fleet_cost)} total fleet cost; ${accessibleBreakdown}`}
               >
                 {isActive && <rect className="chart-selection" x={center - geometry.step / 2} y={geometry.margin.top} width={geometry.step} height={geometry.plotHeight} />}
                 <rect className="chart-bar revenue" x={center - geometry.barWidth - 2} y={revenueY} width={geometry.barWidth} height={geometry.margin.top + geometry.plotHeight - revenueY} rx="2" />
-                <rect className="chart-bar cost" x={center + 2} y={costY} width={geometry.barWidth} height={geometry.margin.top + geometry.plotHeight - costY} rx="2" />
+                {costSegments.map((segment) => (
+                  <rect
+                    key={segment.gl_account}
+                    className="chart-bar cost-segment"
+                    x={center + 2}
+                    y={segment.y}
+                    width={geometry.barWidth}
+                    height={segment.height}
+                    fill={segment.color}
+                  />
+                ))}
                 <rect className="chart-hit-area" x={center - geometry.step / 2} y={geometry.margin.top} width={geometry.step} height={geometry.plotHeight} />
               </g>
             );

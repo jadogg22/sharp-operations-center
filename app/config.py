@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # the repository so the committed query pack stays customer-agnostic.
     customer_code: str = ""
     vacation_companies: str = "TMS,TMS2,TMS3,TMS4,drivers"
+    # Optional manager team overrides in the form "manager_id:Team,...". The
+    # production SQL supplies the roster; this setting only supplies scorecard
+    # grouping where the source schema does not have a team field.
+    overview_manager_teams: str = ""
 
     @field_validator("sql_port", mode="before")
     @classmethod
@@ -44,6 +48,12 @@ class Settings(BaseSettings):
     # The demo default matches the seeded SQLite data. Production deployments
     # set the real Mcloud GL account(s), e.g. 51601000:Fleet lease.
     fleet_cost_categories: str = "FLEET_LEASE:Fleet lease"
+    # Lightweight internal gate for the fleet cost/revenue tool. Production
+    # fails closed when this value is blank; demo mode remains open by default.
+    revenue_report_password: str = ""
+    # Separate gate for employee vacation balances. It intentionally has its
+    # own setting so access can be granted independently from revenue data.
+    vacation_report_password: str = ""
 
     # Application
     app_host: str = "127.0.0.1"

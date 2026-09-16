@@ -71,9 +71,35 @@ Production mode connects read-only to the Mcloud SQL Server and needs a local
    SQL_PASSWORD=...
    # Real GL accounts for the fleet cost report:
    FLEET_COST_CATEGORIES=51601000:Fleet lease
+   # Required in production; protects preview, account search, CSV, and PNG:
+   REVENUE_REPORT_PASSWORD=choose-a-private-password
+   # Required in production; protects vacation balances and CSV downloads:
+   VACATION_REPORT_PASSWORD=choose-a-private-password
    # Your Mcloud customer code for the invoice queries:
    CUSTOMER_CODE=...
    ```
+
+`FLEET_COST_CATEGORIES` supplies the initial fleet-cost selection. In the app,
+users can search the active company GL catalog by account number or name, add
+up to eight verified accounts, and remove the default. The selected accounts
+are stacked into one cost total and carried consistently through the preview,
+CSV, and chart download. The API validates every account against the active GL
+catalog before it queries ledger entries.
+
+The frontend exposes a direct URL for each tool:
+
+- `/overview`
+- `/lane-profitability`
+- `/customer-invoice`
+- `/fleet-cost-revenue`
+- `/vacation-balances`
+- `/load-pricing`
+
+The fleet cost/revenue and vacation-balance URLs display separate unlock
+screens in production. Each password is sent in the `X-Report-Password` header
+and retained only in the browser tab's session storage. Closing the tab locks
+the view again. These are useful internal-network privacy barriers, but they
+are not a replacement for named user accounts or TLS on an untrusted network.
 
    `SQL_DATABASE` also accepts the legacy `SQL_DB` name, so the existing
    go-sharpGraphs environment file works as-is without copying it:

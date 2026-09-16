@@ -8,6 +8,8 @@ export type PricingInputs = {
   fuelSurcharge: number;
   surchargeMode: 'per-mile' | 'round-trip';
   targetMargin: number;
+  outOfBounds: boolean;
+  outOfBoundsProfitUplift: number;
 };
 
 export type PricingResults = {
@@ -23,7 +25,11 @@ export type PricingResults = {
   revenue: number;
   profit: number;
   margin: number;
+  baseTargetRevenue: number;
+  baseTargetProfit: number;
+  outOfBoundsPremium: number;
   targetRevenue: number;
+  effectiveTargetMargin: number;
   targetInboundTotal: number;
   targetInboundPerMile: number;
   targetAverageLoadedRate: number;
@@ -44,11 +50,22 @@ export function calculatePricing(inputs: PricingInputs): PricingResults {
   const revenue = outboundTotal + inboundTotal + fuelSurchargeTotal;
   const profit = revenue - operatingCost;
   const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
-  // Solve margin = (revenue - cost) / revenue for target revenue.
-  const targetRevenue = operatingCost / Math.max(1 - inputs.targetMargin / 100, 0.01);
+  // Solve margin = (revenue - cost) / revenue for the normal target. For an
+  // unfamiliar lane, increase only that target profit rather than marking up
+  // the operating-cost portion of the quote.
+  const baseTargetRevenue = operatingCost / Math.max(1 - inputs.targetMargin / 100, 0.01);
+  const baseTargetProfit = Math.max(baseTargetRevenue - operatingCost, 0);
+  const outOfBoundsProfitUplift = Math.min(Math.max(inputs.outOfBoundsProfitUplift, 20), 60);
+  const outOfBoundsPremium = inputs.outOfBounds
+    ? baseTargetProfit * (outOfBoundsProfitUplift / 100)
+    : 0;
+  const targetRevenue = baseTargetRevenue + outOfBoundsPremium;
+  const effectiveTargetMargin = targetRevenue > 0
+    ? ((targetRevenue - operatingCost) / targetRevenue) * 100
+    : 0;
   const targetInboundTotal = Math.max(targetRevenue - outboundTotal - fuelSurchargeTotal, 0);
   const targetInboundPerMile = inputs.loadedMiles > 0 ? targetInboundTotal / inputs.loadedMiles : 0;
   const targetAverageLoadedRate = totalLoadedMiles > 0 ? targetRevenue / totalLoadedMiles : 0;
   const actualAverageLoadedRate = totalLoadedMiles > 0 ? revenue / totalLoadedMiles : 0;
-  return { totalLoadedMiles, totalMiles, operatingCost, outboundTotal, inboundTotal, outboundPerMile, inboundPerMile, fuelSurchargeTotal, fuelSurchargePerMile, revenue, profit, margin, targetRevenue, targetInboundTotal, targetInboundPerMile, targetAverageLoadedRate, actualAverageLoadedRate };
+  return { totalLoadedMiles, totalMiles, operatingCost, outboundTotal, inboundTotal, outboundPerMile, inboundPerMile, fuelSurchargeTotal, fuelSurchargePerMile, revenue, profit, margin, baseTargetRevenue, baseTargetProfit, outOfBoundsPremium, targetRevenue, effectiveTargetMargin, targetInboundTotal, targetInboundPerMile, targetAverageLoadedRate, actualAverageLoadedRate };
 }

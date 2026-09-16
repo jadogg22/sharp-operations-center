@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -137,6 +138,8 @@ def test_public_report_routes_are_preserved() -> None:
     assert "/api/reports/customer-invoice/preview" in paths
     assert "/api/reports/customer-invoice/billing-dates" in paths
     assert "/api/reports/fleet-cost-revenue/preview" in paths
+    assert "/api/reports/fleet-cost-revenue/accounts" in paths
+    assert "/api/reports/fleet-cost-revenue/unlock" in paths
     assert "/api/reports/fleet-cost-revenue.csv" in paths
     assert "/api/reports/fleet-cost-revenue.png" in paths
     assert "/api/reports/vacation/preview" in paths
@@ -154,3 +157,152 @@ def test_fleet_view_rejects_unknown_granularity() -> None:
         },
     )
     assert response.status_code == 422
+
+
+def test_fleet_account_search_returns_verified_active_matches() -> None:
+    response = client.get(
+        "/api/reports/fleet-cost-revenue/accounts",
+        params={"search": "fuel"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["default_accounts"][0]["gl_account"] == "FLEET_LEASE"
+    assert {account["gl_account"] for account in payload["accounts"]} == {
+        "51100000",
+        "51100001",
+    }
+
+
+def test_fleet_preview_stacks_selected_gl_accounts() -> None:
+    response = client.get(
+        "/api/reports/fleet-cost-revenue/preview",
+        params=[
+            ("start_date", "2026-07-01"),
+            ("end_date", "2026-07-31"),
+            ("granularity", "month"),
+            ("gl_account", "FLEET_LEASE"),
+            ("gl_account", "51100000"),
+        ],
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["gl_account"] for item in payload["cost_categories"]] == [
+        "FLEET_LEASE",
+        "51100000",
+    ]
+    assert payload["summary"]["source_fleet_cost"] == sum(
+        item["source_amount"] for item in payload["cost_categories"]
+    )
+    assert [item["gl_account"] for item in payload["periods"][0]["cost_breakdown"]] == [
+        "FLEET_LEASE",
+        "51100000",
+    ]
+    assert (
+        sum(
+            item["allocated_amount"] for item in payload["periods"][0]["cost_breakdown"]
+        )
+        == payload["periods"][0]["allocated_fleet_cost"]
+    )
+
+
+def test_fleet_preview_rejects_unknown_gl_account() -> None:
+    response = client.get(
+        "/api/reports/fleet-cost-revenue/preview",
+        params={
+            "start_date": "2026-07-01",
+            "end_date": "2026-07-31",
+            "gl_account": "NOT_REAL",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Unknown or inactive GL account: NOT_REAL"
+
+
+def test_production_revenue_endpoints_require_the_configured_password(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.fleet_cost_revenue.get_settings",
+        lambda: SimpleNamespace(
+            data_mode="production",
+            revenue_report_password="private-report-password",
+        ),
+    )
+
+    missing = client.post("/api/reports/fleet-cost-revenue/unlock")
+    incorrect = client.post(
+        "/api/reports/fleet-cost-revenue/unlock",
+        headers={"X-Report-Password": "wrong"},
+    )
+    accepted = client.post(
+        "/api/reports/fleet-cost-revenue/unlock",
+        headers={"X-Report-Password": "private-report-password"},
+    )
+
+    assert missing.status_code == 401
+    assert incorrect.status_code == 401
+    assert accepted.status_code == 200
+    assert accepted.json() == {"unlocked": True}
+
+
+def test_production_revenue_gate_fails_closed_without_configuration(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.fleet_cost_revenue.get_settings",
+        lambda: SimpleNamespace(data_mode="production", revenue_report_password=""),
+    )
+
+    response = client.post("/api/reports/fleet-cost-revenue/unlock")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Revenue report password is not configured"
+
+
+def test_production_vacation_endpoints_require_the_configured_password(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.vacation.get_settings",
+        lambda: SimpleNamespace(
+            data_mode="production",
+            vacation_report_password="private-vacation-password",
+        ),
+    )
+
+    missing = client.post("/api/reports/vacation/unlock")
+    incorrect = client.post(
+        "/api/reports/vacation/unlock",
+        headers={"X-Report-Password": "wrong"},
+    )
+    accepted = client.post(
+        "/api/reports/vacation/unlock",
+        headers={"X-Report-Password": "private-vacation-password"},
+    )
+    preview = client.get(
+        "/api/reports/vacation/preview",
+        headers={"X-Report-Password": "private-vacation-password"},
+    )
+
+    assert missing.status_code == 401
+    assert incorrect.status_code == 401
+    assert accepted.status_code == 200
+    assert accepted.json() == {"unlocked": True}
+    assert preview.status_code == 200
+
+
+def test_production_vacation_gate_fails_closed_without_configuration(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.vacation.get_settings",
+        lambda: SimpleNamespace(data_mode="production", vacation_report_password=""),
+    )
+
+    response = client.post("/api/reports/vacation/unlock")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Vacation report password is not configured"

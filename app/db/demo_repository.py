@@ -8,6 +8,7 @@ from app.models import (
     CustomerBillingDate,
     CustomerStop,
     DailyRevenue,
+    FleetCostAccount,
     FleetCostEntry,
     LaneLoad,
     VacationBalance,
@@ -98,6 +99,40 @@ def fetch_fleet_cost_entries(
     ]
 
 
+def _fleet_cost_account(row: dict[str, Any]) -> FleetCostAccount:
+    return FleetCostAccount(
+        gl_account=str(row["gl_account"]),
+        label=str(row["label"]),
+        account_type=str(row["account_type"] or ""),
+    )
+
+
+def search_fleet_cost_accounts(search: str) -> list[FleetCostAccount]:
+    term = f"%{search.lower()}%"
+    rows = _rows(
+        """SELECT gl_account, label, account_type FROM fleet_cost_accounts
+           WHERE active = 1 AND (LOWER(gl_account) LIKE ? OR LOWER(label) LIKE ?)
+           ORDER BY CASE WHEN LOWER(gl_account) = LOWER(?) THEN 0 ELSE 1 END,
+                    gl_account LIMIT 20""",
+        (term, term, search),
+    )
+    return [_fleet_cost_account(row) for row in rows]
+
+
+def fetch_fleet_cost_account_details(
+    gl_accounts: tuple[str, ...]
+) -> list[FleetCostAccount]:
+    if not gl_accounts:
+        return []
+    placeholders = ", ".join("?" for _ in gl_accounts)
+    rows = _rows(
+        f"""SELECT gl_account, label, account_type FROM fleet_cost_accounts
+             WHERE active = 1 AND gl_account IN ({placeholders})""",
+        gl_accounts,
+    )
+    return [_fleet_cost_account(row) for row in rows]
+
+
 def fetch_daily_revenue(start_date: date, end_date: date) -> list[DailyRevenue]:
     rows = _rows(
         "SELECT revenue_date, order_count, revenue FROM daily_revenue WHERE revenue_date BETWEEN ? AND ? ORDER BY revenue_date",
@@ -113,7 +148,7 @@ def fetch_vacation_balances() -> list[VacationBalance]:
     rows = _rows(
         """SELECT company_id, employee_group, employee_id, employee_name,
                   vacation_hours_due, vacation_pay_rate, amount_due
-           FROM vacation_balances ORDER BY employee_group, amount_due DESC, employee_name"""
+           FROM vacation_balances ORDER BY company_id, employee_group, employee_name"""
     )
     return [VacationBalance(**row) for row in rows]
 

@@ -8,6 +8,7 @@ from pypdf import PdfReader
 from app.models import CustomerStop, DailyRevenue, FleetCostEntry, LaneLoad
 from app.reports.customer_invoice import generate_customer_invoice, invoice_total
 from app.reports.fleet_cost_revenue import (
+    FleetCostCategory,
     analyze_fleet_cost_revenue,
     fleet_cost_revenue_chart,
     fleet_cost_revenue_csv,
@@ -151,6 +152,7 @@ def test_fleet_outputs_are_sendable_files() -> None:
 
     csv_bytes = fleet_cost_revenue_csv(analysis)
     assert csv_bytes.startswith(b"\xef\xbb\xbfPeriod")
+    assert b"Allocated Fleet lease (GL FLEET_LEASE)" in csv_bytes
     assert b"Fleet cost source,FLEET_LEASE,Fleet lease,$310.00" in csv_bytes
     assert fleet_cost_revenue_chart(analysis).startswith(b"\x89PNG\r\n\x1a\n")
 
@@ -176,3 +178,56 @@ def test_fleet_analysis_supports_day_and_month_views() -> None:
     assert len(monthly["periods"]) == 1
     assert monthly["periods"][0]["label"] == "July 2026"
     assert monthly["summary"] == daily["summary"]
+
+
+def test_fleet_analysis_stacks_multiple_verified_cost_categories() -> None:
+    analysis = analyze_fleet_cost_revenue(
+        date(2026, 7, 1),
+        date(2026, 7, 31),
+        [
+            FleetCostEntry("LEASE", date(2026, 7, 1), 310.00),
+            FleetCostEntry("FUEL", date(2026, 7, 1), 620.00),
+        ],
+        [DailyRevenue(date(2026, 7, 1), 1, 2_000.00)],
+        cost_categories=(
+            FleetCostCategory("LEASE", "Fleet lease"),
+            FleetCostCategory("FUEL", "Fuel & oil"),
+        ),
+    )
+
+    assert analysis["summary"]["allocated_fleet_cost"] == 930.00
+    assert analysis["summary"]["revenue_after_fleet_cost"] == 1_070.00
+    assert analysis["cost_categories"] == [
+        {"gl_account": "LEASE", "label": "Fleet lease", "source_amount": 310.00},
+        {"gl_account": "FUEL", "label": "Fuel & oil", "source_amount": 620.00},
+    ]
+    assert analysis["periods"][0]["cost_breakdown"] == [
+        {
+            "gl_account": "LEASE",
+            "label": "Fleet lease",
+            "allocated_amount": 40.00,
+        },
+        {
+            "gl_account": "FUEL",
+            "label": "Fuel & oil",
+            "allocated_amount": 80.00,
+        },
+    ]
+    assert all(
+        round(
+            sum(item["allocated_amount"] for item in period["cost_breakdown"]),
+            2,
+        )
+        == period["allocated_fleet_cost"]
+        for period in analysis["periods"]
+    )
+    assert [
+        round(
+            sum(
+                period["cost_breakdown"][category_index]["allocated_amount"]
+                for period in analysis["periods"]
+            ),
+            2,
+        )
+        for category_index in range(2)
+    ] == [310.00, 620.00]

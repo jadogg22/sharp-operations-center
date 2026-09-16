@@ -18,6 +18,7 @@ from app.models import (
     CustomerBillingDate,
     CustomerStop,
     DailyRevenue,
+    FleetCostAccount,
     FleetCostEntry,
     LaneLoad,
     VacationBalance,
@@ -56,6 +57,22 @@ def fetch_fleet_cost_entries(
             start_date, end_date, gl_accounts
         )
     return demo_repository.fetch_fleet_cost_entries(start_date, end_date, gl_accounts)
+
+
+def search_fleet_cost_accounts(search: str) -> list[FleetCostAccount]:
+    """Search active GL accounts in the selected data source."""
+    if _is_production():
+        return production_repository.search_fleet_cost_accounts(search)
+    return demo_repository.search_fleet_cost_accounts(search)
+
+
+def fetch_fleet_cost_account_details(
+    gl_accounts: tuple[str, ...]
+) -> list[FleetCostAccount]:
+    """Resolve exact active GL account IDs for server-side validation."""
+    if _is_production():
+        return production_repository.fetch_fleet_cost_account_details(gl_accounts)
+    return demo_repository.fetch_fleet_cost_account_details(gl_accounts)
 
 
 def fetch_daily_revenue(start_date: date, end_date: date) -> list[DailyRevenue]:

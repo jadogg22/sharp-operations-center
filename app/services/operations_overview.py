@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from app.config import get_settings
 from app.db.repository import (
     fetch_operations_fleet_status,
     fetch_operations_performance,
@@ -10,7 +11,7 @@ from app.db.repository import (
 )
 from app.services.errors import DataSourceQueryError
 
-MANAGER_TEAMS = {
+DEMO_MANAGER_TEAMS = {
     "carter": "OTR",
     "blake": "OTR",
     "reed": "OTR",
@@ -19,7 +20,7 @@ MANAGER_TEAMS = {
     "hayes": "Specialized",
 }
 
-MANAGER_NAMES = {
+DEMO_MANAGER_NAMES = {
     "carter": "Alex Carter",
     "blake": "Jordan Blake",
     "reed": "Morgan Reed",
@@ -27,6 +28,11 @@ MANAGER_NAMES = {
     "quinn": "Taylor Quinn",
     "hayes": "Riley Hayes",
 }
+
+# Keep the old names available for callers that imported these demo defaults;
+# production roster selection is handled by _manager_teams below.
+MANAGER_TEAMS = DEMO_MANAGER_TEAMS
+MANAGER_NAMES = DEMO_MANAGER_NAMES
 
 @dataclass(frozen=True)
 class OverviewConfig:
@@ -80,6 +86,19 @@ def _business_days(start_date: date, end_date: date) -> int:
         for offset in range((end_date - start_date).days + 1)
         if (start_date + timedelta(days=offset)).weekday() < 5
     )
+
+
+def _manager_teams() -> dict[str, str]:
+    """Read optional production team overrides, falling back to demo teams."""
+    configured = get_settings().overview_manager_teams
+    if not configured.strip():
+        return DEMO_MANAGER_TEAMS
+    teams: dict[str, str] = {}
+    for item in configured.split(","):
+        manager_id, separator, team = item.partition(":")
+        if separator and manager_id.strip() and team.strip():
+            teams[manager_id.strip()] = team.strip()
+    return teams or DEMO_MANAGER_TEAMS
 
 
 def _ratio(numerator: float, denominator: float) -> float | None:
@@ -236,7 +255,7 @@ def _build_manager(
     pace_pct = month["mptpd"] / goal["mptpd"] * 100 if goal and month["mptpd"] is not None else None
     return {
         "manager_id": manager_id,
-        "name": MANAGER_NAMES.get(
+        "name": DEMO_MANAGER_NAMES.get(
             manager_id,
             str(tractor.get("manager_name") or manager_id).title(),
         ),
@@ -262,19 +281,36 @@ def _build_managers(
     Missing SQL rows become zero-valued metric objects rather than disappearing
     from the response, which keeps the table and capacity panels aligned.
     """
+    settings = get_settings()
+    configured_teams = _manager_teams()
+    has_team_overrides = bool(settings.overview_manager_teams.strip())
     week_by_manager = {row["manager_id"]: row for row in week_rows}
     month_by_manager = {row["manager_id"]: row for row in month_rows}
     tractors_by_manager = {row["manager_id"]: row for row in tractor_rows}
+    source_ids = list(dict.fromkeys(
+        [row["manager_id"] for row in tractor_rows]
+        + [row["manager_id"] for row in week_rows]
+        + [row["manager_id"] for row in month_rows]
+    ))
+    # Production IDs come from the database. Demo uses its stable configured
+    # roster, while production overrides establish the desired team order and
+    # still allow a newly appearing manager to show as Specialized.
+    if not has_team_overrides and settings.data_mode.strip().lower() == "production":
+        manager_ids = source_ids
+    elif configured_teams is DEMO_MANAGER_TEAMS:
+        manager_ids = list(configured_teams)
+    else:
+        manager_ids = list(dict.fromkeys(list(configured_teams) + source_ids))
     return [
         _build_manager(
             manager_id,
-            team,
+            configured_teams.get(manager_id, "Specialized"),
             week_by_manager,
             month_by_manager,
             tractors_by_manager,
             windows,
         )
-        for manager_id, team in MANAGER_TEAMS.items()
+        for manager_id in manager_ids
     ]
 
 
@@ -289,7 +325,7 @@ def _build_summary(
     simple average of manager percentages from distorting the team result.
     """
     otr_ids = {
-        manager_id for manager_id, team in MANAGER_TEAMS.items() if team == "OTR"
+        manager["manager_id"] for manager in managers if manager["team"] == "OTR"
     }
     otr_week = _aggregate(week_rows, otr_ids)
     otr_managers = [manager for manager in managers if manager["team"] == "OTR"]

@@ -27,6 +27,8 @@ export default function LoadPricingCalculator() {
   const [fuelSurchargeInput, setFuelSurchargeInput] = useState('0');
   const [surchargeMode, setSurchargeMode] = useState<SurchargeMode>('round-trip');
   const [targetMargin, setTargetMargin] = useState(15);
+  const [outOfBounds, setOutOfBounds] = useState(false);
+  const [outOfBoundsProfitUplift, setOutOfBoundsProfitUplift] = useState(20);
 
   const loadedMiles = inputNumber(loadedMilesInput);
   const deadheadMiles = inputNumber(deadheadMilesInput);
@@ -35,8 +37,8 @@ export default function LoadPricingCalculator() {
   const enteredFuelSurcharge = inputNumber(fuelSurchargeInput);
 
   const results = useMemo(() => {
-    return calculatePricing({ cpm, loadedMiles, deadheadMiles, outboundRate: outboundEnteredRate, inboundRate: inboundEnteredRate, rateMode, fuelSurcharge: enteredFuelSurcharge, surchargeMode, targetMargin });
-  }, [cpm, deadheadMiles, enteredFuelSurcharge, inboundEnteredRate, loadedMiles, outboundEnteredRate, rateMode, surchargeMode, targetMargin]);
+    return calculatePricing({ cpm, loadedMiles, deadheadMiles, outboundRate: outboundEnteredRate, inboundRate: inboundEnteredRate, rateMode, fuelSurcharge: enteredFuelSurcharge, surchargeMode, targetMargin, outOfBounds, outOfBoundsProfitUplift });
+  }, [cpm, deadheadMiles, enteredFuelSurcharge, inboundEnteredRate, loadedMiles, outOfBounds, outOfBoundsProfitUplift, outboundEnteredRate, rateMode, surchargeMode, targetMargin]);
 
   const changeRateMode = (nextMode: RateMode) => {
     if (nextMode === rateMode) return;
@@ -62,12 +64,18 @@ export default function LoadPricingCalculator() {
     setSurchargeMode(nextMode);
   };
 
-  const targetMet = results.margin >= targetMargin;
+  const targetMet = results.revenue >= results.targetRevenue;
   const revenueGap = Math.max(results.targetRevenue - results.revenue, 0);
   const marginClass = targetMet ? 'target-met' : results.margin < 0 ? 'negative' : 'below-target';
   const revenueProgress = results.targetRevenue > 0
     ? Math.min((results.revenue / results.targetRevenue) * 100, 100)
     : 0;
+  const targetDescription = outOfBounds
+    ? `${targetMargin}% base margin + ${outOfBoundsProfitUplift}% profit premium`
+    : `${targetMargin}% round-trip margin`;
+  const marginTargetLabel = outOfBounds
+    ? `${results.effectiveTargetMargin.toFixed(1)}% adjusted target`
+    : `${targetMargin}% target`;
 
   return (
     <div className="pricing-tool">
@@ -136,37 +144,53 @@ export default function LoadPricingCalculator() {
               </label>
             </div>
 
-            <fieldset className="fuel-entry-field">
-              <legend>Fuel surcharge</legend>
-              <div className="fuel-entry-control">
-                <input type="number" min="0" step="0.01" value={fuelSurchargeInput} onChange={(event) => setFuelSurchargeInput(event.target.value)} placeholder="Enter surcharge" aria-label="Fuel surcharge" />
-                <div className="fuel-mode-toggle">
-                  <button type="button" aria-pressed={surchargeMode === 'per-mile'} onClick={() => changeSurchargeMode('per-mile')}>Per mile</button>
-                  <button type="button" aria-pressed={surchargeMode === 'round-trip'} onClick={() => changeSurchargeMode('round-trip')}>Total</button>
+            <div className="pricing-adjustments-grid">
+              <fieldset className="fuel-entry-field">
+                <legend>Fuel surcharge</legend>
+                <div className="fuel-entry-control">
+                  <input type="number" min="0" step="0.01" value={fuelSurchargeInput} onChange={(event) => setFuelSurchargeInput(event.target.value)} placeholder="Enter surcharge" aria-label="Fuel surcharge" />
+                  <div className="fuel-mode-toggle">
+                    <button type="button" aria-pressed={surchargeMode === 'per-mile'} onClick={() => changeSurchargeMode('per-mile')}>Per mile</button>
+                    <button type="button" aria-pressed={surchargeMode === 'round-trip'} onClick={() => changeSurchargeMode('round-trip')}>Total</button>
+                  </div>
                 </div>
-              </div>
-              <small>{surchargeMode === 'per-mile' ? `${money.format(results.fuelSurchargeTotal)} round-trip fuel revenue` : `${money.format(results.fuelSurchargePerMile)} per loaded mile across both legs`}</small>
-            </fieldset>
+                <small>{surchargeMode === 'per-mile' ? `${money.format(results.fuelSurchargeTotal)} round-trip fuel revenue` : `${money.format(results.fuelSurchargePerMile)} per loaded mile across both legs`}</small>
+              </fieldset>
+
+              <fieldset className={`out-of-bounds-field ${outOfBounds ? 'active' : ''}`}>
+                <legend>Lane familiarity</legend>
+                <label className="out-of-bounds-toggle">
+                  <input type="checkbox" checked={outOfBounds} onChange={(event) => setOutOfBounds(event.target.checked)} />
+                  <span><strong>Out-of-bounds lane</strong><small>Outside our normal running area</small></span>
+                </label>
+                <label className="out-of-bounds-slider">
+                  <span className="pricing-label-row"><span>Profit premium</span><output>{outOfBoundsProfitUplift}%</output></span>
+                  <input className="range-input" type="range" min="20" max="60" step="5" value={outOfBoundsProfitUplift} disabled={!outOfBounds} onChange={(event) => setOutOfBoundsProfitUplift(Number(event.target.value))} />
+                  <span className="range-endpoints"><small>20%</small><small>60%</small></span>
+                </label>
+                <small>{outOfBounds ? `Adds ${money.format(results.outOfBoundsPremium)} above the normal target profit.` : 'Turn on to price extra risk into an unfamiliar lane.'}</small>
+              </fieldset>
+            </div>
           </div>
         </section>
 
         <section className="pricing-results" aria-live="polite">
           <article className="pricing-quote-card">
             <div className="quote-card-heading">
-              <div><span>Recommended return quote</span><small>To reach a {targetMargin}% round-trip margin</small></div>
+              <div><span>Recommended return quote</span><small>To reach a {targetDescription}</small></div>
               <span className={targetMet ? 'quote-status target-met' : 'quote-status below-target'}>{targetMet ? 'Margin covered' : `${money.format(revenueGap)} gap`}</span>
             </div>
             <div className="quote-values">
               <div><span>Target inbound load</span><strong>{money.format(results.targetInboundTotal)}</strong></div>
               <div><span>Per loaded mile</span><strong>{money.format(results.targetInboundPerMile)}</strong></div>
             </div>
-            <p>Outbound is held at {money.format(results.outboundTotal)} and fuel surcharge at {money.format(results.fuelSurchargeTotal)}. The recommendation is the remaining inbound linehaul needed for the target.</p>
+            <p>Outbound is held at {money.format(results.outboundTotal)} and fuel surcharge at {money.format(results.fuelSurchargeTotal)}. The recommendation is the remaining inbound linehaul needed for the target.{outOfBounds ? ` It includes a ${money.format(results.outOfBoundsPremium)} unfamiliar-lane premium.` : ''}</p>
           </article>
 
           <div className={`pricing-breakdown ${marginClass}`}>
             <div className="margin-heading">
               <div><span>Margin check</span><strong>{results.margin.toFixed(1)}%</strong><small>Actual margin</small></div>
-              <span className="margin-status">{targetMet ? 'On target' : `Below ${targetMargin}% target`}</span>
+              <span className="margin-status">{targetMet ? 'On target' : `Below ${marginTargetLabel}`}</span>
             </div>
             <div className="pricing-label-row"><span>Revenue progress</span><strong>{money.format(results.revenue)} of {money.format(results.targetRevenue)}</strong></div>
             <div className="pricing-bar"><i style={{ width: `${revenueProgress}%` }} /></div>
@@ -187,11 +211,11 @@ export default function LoadPricingCalculator() {
       <details className="pricing-math-details">
         <summary><div><span>Supporting target math</span><small>Revenue, average rate, and mileage behind the recommendation</small></div></summary>
         <div className="pricing-target-grid">
-          <article className="target-card primary"><span>Target round-trip revenue</span><strong>{money.format(results.targetRevenue)}</strong><small>Revenue needed for a {targetMargin}% margin</small></article>
+          <article className="target-card primary"><span>Target round-trip revenue</span><strong>{money.format(results.targetRevenue)}</strong><small>Revenue needed for a {targetDescription}</small></article>
           <article className="target-card"><span>Target average loaded rate</span><strong>{money.format(results.targetAverageLoadedRate)}</strong><small>Per mile across both loaded legs</small></article>
           <article className="target-card"><span>Round-trip mileage</span><strong>{results.totalMiles.toLocaleString()}</strong><small>{results.totalLoadedMiles.toLocaleString()} loaded + {deadheadMiles.toLocaleString()} deadhead</small></article>
         </div>
-        <p className="pricing-note">Assumes CPM applies to every loaded and deadhead mile, and both loaded legs use the same one-way mileage. Fuel surcharge is treated as additional revenue. The target inbound load is the remaining linehaul revenue required after outbound and fuel surcharge.</p>
+        <p className="pricing-note">Assumes CPM applies to every loaded and deadhead mile, and both loaded legs use the same one-way mileage. Fuel surcharge is treated as additional revenue. When enabled, the out-of-bounds adjustment adds 20–60% to the normal target profit—not to operating cost. The target inbound load is the remaining linehaul revenue required after outbound, fuel surcharge, and any lane premium.</p>
       </details>
     </div>
   );

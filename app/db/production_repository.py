@@ -19,6 +19,7 @@ from app.models import (
     CustomerBillingDate,
     CustomerStop,
     DailyRevenue,
+    FleetCostAccount,
     FleetCostEntry,
     LaneLoad,
     VacationBalance,
@@ -120,6 +121,38 @@ def fetch_fleet_cost_entries(
     return [FleetCostEntry(**row) for row in rows]
 
 
+def _fleet_cost_account(row: dict[str, Any]) -> FleetCostAccount:
+    return FleetCostAccount(
+        gl_account=str(row["gl_account"]).strip(),
+        label=str(row["label"] or row["gl_account"]).strip(),
+        account_type=str(row.get("account_type") or "").strip(),
+    )
+
+
+def search_fleet_cost_accounts(search: str) -> list[FleetCostAccount]:
+    """Search the active TMS GL catalog by account prefix or description."""
+    escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    rows = _rows(
+        "fleet_cost_account_search.sql",
+        (search, f"{escaped}%", f"%{escaped}%", search, f"{escaped}%"),
+    )
+    return [_fleet_cost_account(row) for row in rows]
+
+
+def fetch_fleet_cost_account_details(
+    gl_accounts: tuple[str, ...]
+) -> list[FleetCostAccount]:
+    """Return authoritative metadata for exact active account IDs."""
+    if not gl_accounts:
+        return []
+    rows = _rows(
+        "fleet_cost_account_details.sql",
+        gl_accounts,
+        gl_accounts=gl_accounts,
+    )
+    return [_fleet_cost_account(row) for row in rows]
+
+
 def fetch_daily_revenue(start_date: date, end_date: date) -> list[DailyRevenue]:
     rows = _rows("fleet_revenue.sql", _bounds(start_date, end_date))
     return [
@@ -168,7 +201,7 @@ def fetch_vacation_balances() -> list[VacationBalance]:
                 vacation_pay_rate=rate,
                 amount_due=round(amount, 2),
             ))
-    return sorted(result, key=lambda item: (-item.amount_due, item.employee_name))
+    return result
 
 
 def fetch_operations_performance(

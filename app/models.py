@@ -33,6 +33,15 @@ class FleetCostEntry:
 
 
 @dataclass(frozen=True)
+class FleetCostAccount:
+    """Authoritative GL account metadata used by the fleet-cost picker."""
+
+    gl_account: str
+    label: str
+    account_type: str = ""
+
+
+@dataclass(frozen=True)
 class DailyRevenue:
     revenue_date: date | datetime
     order_count: int

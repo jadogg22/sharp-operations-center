@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import Image from 'next/image';
 
 import type { FleetGranularity } from './components/FleetPerformanceChart';
@@ -8,10 +8,12 @@ import FleetReportPanel from './components/FleetReportPanel';
 import LoadPricingCalculator from './components/LoadPricingCalculator';
 import OwnerOverview from './components/OwnerOverview';
 import ReportGenerator from './components/ReportGenerator';
+import RevenueAccessGate, { clearSavedRevenuePassword } from './components/RevenueAccessGate';
+import VacationAccessGate, { clearSavedVacationPassword } from './components/VacationAccessGate';
 import CustomerReview from './components/CustomerReview';
 import VacationReport from './components/VacationReport';
 import { downloadResponse, reportError } from './reportClient';
-import type { BillingDateResponse, FleetPreview, PreviewOrder, ReportKind, CustomerPreview } from './reportTypes';
+import type { BillingDateResponse, FleetCostAccount, FleetPreview, PreviewOrder, ReportKind, CustomerPreview } from './reportTypes';
 
 const reports = {
   overview: { eyebrow: 'Morning operations', title: 'Owner overview', description: 'See fleet capacity, manager performance, service risks, and today’s operational exceptions in one briefing.', button: 'View briefing', format: 'AUG 28' },
@@ -25,8 +27,17 @@ const reports = {
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const percent = new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 });
 
-export default function Home() {
-  const [activeReport, setActiveReport] = useState<ReportKind>('overview');
+const reportPaths: Record<ReportKind, string> = {
+  overview: '/overview',
+  lane: '/lane-profitability',
+  customer: '/customer-invoice',
+  fleet: '/fleet-cost-revenue',
+  vacation: '/vacation-balances',
+  pricing: '/load-pricing',
+};
+
+export default function OperationsCenter({ initialReport = 'overview' }: { initialReport?: ReportKind }) {
+  const [activeReport, setActiveReport] = useState<ReportKind>(initialReport);
   const [startDate, setStartDate] = useState('2026-08-24');
   const [endDate, setEndDate] = useState('2026-08-30');
   const [invoiceEndDate, setInvoiceEndDate] = useState('');
@@ -35,6 +46,11 @@ export default function Home() {
   const [preview, setPreview] = useState<CustomerPreview | null>(null);
   const [fleetPreview, setFleetPreview] = useState<FleetPreview | null>(null);
   const [fleetGranularity, setFleetGranularity] = useState<FleetGranularity>('week');
+  const [fleetAccounts, setFleetAccounts] = useState<FleetCostAccount[]>([]);
+  const [revenueAccessPassword, setRevenueAccessPassword] = useState('');
+  const [revenueUnlocked, setRevenueUnlocked] = useState(false);
+  const [vacationAccessPassword, setVacationAccessPassword] = useState('');
+  const [vacationUnlocked, setVacationUnlocked] = useState(false);
   const [billingDates, setBillingDates] = useState<BillingDateResponse | null>(null);
   const [billingDatesLoading, setBillingDatesLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
@@ -43,6 +59,38 @@ export default function Home() {
   const [success, setSuccess] = useState('');
   const report = reports[activeReport];
   const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+  const productionMode = process.env.NEXT_PUBLIC_DATA_MODE === 'production';
+  const dataSourceLabel = productionMode ? 'Production read-only data' : 'Synthetic portfolio data';
+  const dataSourceTitle = productionMode ? 'Production read-only mode' : 'SQLite demo mode';
+  const dataSourceDescription = productionMode
+    ? 'Live reporting records are queried without write access.'
+    : 'Synthetic records exercise the complete reporting workflow.';
+  const fleetRevenueLocked = activeReport === 'fleet' && productionMode && !revenueUnlocked;
+  const vacationLocked = activeReport === 'vacation' && productionMode && !vacationUnlocked;
+
+  const lockRevenueView = useCallback(() => {
+    clearSavedRevenuePassword();
+    setRevenueAccessPassword('');
+    setRevenueUnlocked(false);
+    setFleetAccounts([]);
+    setFleetPreview(null);
+  }, []);
+
+  const unlockRevenueView = useCallback((password: string) => {
+    setRevenueAccessPassword(password);
+    setRevenueUnlocked(true);
+  }, []);
+
+  const lockVacationView = useCallback(() => {
+    clearSavedVacationPassword();
+    setVacationAccessPassword('');
+    setVacationUnlocked(false);
+  }, []);
+
+  const unlockVacationView = useCallback((password: string) => {
+    setVacationAccessPassword(password);
+    setVacationUnlocked(true);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -62,6 +110,15 @@ export default function Home() {
     return () => { active = false; };
   }, [apiBase]);
 
+  useEffect(() => {
+    const syncReportFromHistory = () => {
+      const reportForPath = (Object.entries(reportPaths) as [ReportKind, string][]).find(([, path]) => path === window.location.pathname)?.[0];
+      if (reportForPath) setActiveReport(reportForPath);
+    };
+    window.addEventListener('popstate', syncReportFromHistory);
+    return () => window.removeEventListener('popstate', syncReportFromHistory);
+  }, []);
+
   const reviewedTotal = useMemo(() => preview?.orders.filter((order) => order.included).reduce((sum, order) => sum + order.total_charge, 0) ?? 0, [preview]);
   const includedOrders = preview?.orders.filter((order) => order.included).length ?? 0;
   const expected = expectedTotal === '' ? null : Number(expectedTotal);
@@ -69,6 +126,7 @@ export default function Home() {
 
   const chooseReport = (kind: ReportKind) => {
     setActiveReport(kind); setPreview(null); setFleetPreview(null); setEditMode(false); setError(''); setSuccess('');
+    if (window.location.pathname !== reportPaths[kind]) window.history.pushState({}, '', reportPaths[kind]);
   };
   const setStartDateAndReset = (value: string) => { setStartDate(value); setPreview(null); setFleetPreview(null); };
   const setEndDateAndReset = (value: string) => { setEndDate(value); setFleetPreview(null); };
@@ -91,7 +149,9 @@ export default function Home() {
 
   const loadFleetPreview = async (granularity: FleetGranularity) => {
     const parameters = new URLSearchParams({ start_date: startDate, end_date: endDate, granularity });
-    const response = await fetch(`${apiBase}/reports/fleet-cost-revenue/preview?${parameters.toString()}`);
+    fleetAccounts.forEach((account) => parameters.append('gl_account', account.gl_account));
+    const response = await fetch(`${apiBase}/reports/fleet-cost-revenue/preview?${parameters.toString()}`, { headers: { 'X-Report-Password': revenueAccessPassword } });
+    if (response.status === 401) lockRevenueView();
     if (!response.ok) await reportError(response, 'The fleet analysis could not be loaded.');
     setFleetPreview(await response.json() as FleetPreview);
   };
@@ -102,11 +162,19 @@ export default function Home() {
     try { await loadFleetPreview(granularity); } catch (errorValue) { setError(errorValue instanceof Error ? errorValue.message : 'The fleet analysis could not be loaded.'); } finally { setLoading(false); }
   };
 
+  const changeFleetAccounts = (accounts: FleetCostAccount[]) => {
+    setFleetAccounts(accounts);
+    setFleetPreview(null);
+    setError('');
+    setSuccess('');
+  };
+
   const handlePrimaryAction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setError(''); setSuccess('');
     if (activeReport === 'pricing' || activeReport === 'overview') return;
     if (!startDate) { setError(activeReport === 'customer' ? 'Choose the bill date.' : 'Choose a start date.'); return; }
     if (activeReport !== 'customer' && (!endDate || endDate < startDate)) { setError(!endDate ? 'Choose an end date.' : 'The end date must be on or after the start date.'); return; }
+    if (activeReport === 'fleet' && fleetAccounts.length === 0) { setError('Add at least one verified GL account.'); return; }
     if (activeReport === 'customer' && invoiceEndDate && invoiceEndDate < startDate) { setError('The optional end date must be on or after the bill date.'); return; }
     setLoading(true);
     try {
@@ -145,25 +213,31 @@ export default function Home() {
     setLoading(true); setError(''); setSuccess('');
     try {
       const parameters = new URLSearchParams({ start_date: startDate, end_date: endDate, granularity: fleetGranularity });
-      const response = await fetch(`${apiBase}/reports/fleet-cost-revenue.${format}?${parameters.toString()}`);
+      fleetPreview.cost_categories.forEach((account) => parameters.append('gl_account', account.gl_account));
+      const response = await fetch(`${apiBase}/reports/fleet-cost-revenue.${format}?${parameters.toString()}`, { headers: { 'X-Report-Password': revenueAccessPassword } });
+      if (response.status === 401) lockRevenueView();
       await downloadReport(response, `fleet-cost-revenue.${format}`);
     } catch (errorValue) { setError(errorValue instanceof Error ? errorValue.message : 'The file could not be downloaded.'); } finally { setLoading(false); }
   };
 
   return (
     <main className="app-shell">
-      <header className="topbar"><div className="brand-lockup"><span className="brand-mark" aria-hidden="true"><Image src="/sharp-35th-logo.png" alt="" width={68} height={48} priority /></span><div><p className="brand-name">Sharp Transportation</p><p className="brand-subtitle">Operations center</p></div></div><div className="connection-status"><span className="status-dot" aria-hidden="true" />Synthetic portfolio data</div></header>
+      <header className="topbar"><div className="brand-lockup"><span className="brand-mark" aria-hidden="true"><Image src="/sharp-35th-logo.png" alt="" width={68} height={48} priority /></span><div><p className="brand-name">Sharp Transportation</p><p className="brand-subtitle">Operations center</p></div></div><div className="connection-status"><span className="status-dot" aria-hidden="true" />{dataSourceLabel}</div></header>
       <section className="workspace">
-        <aside className="report-nav" aria-label="Reports"><div><p className="nav-label">Reports</p><nav>{(['overview', 'lane', 'customer', 'fleet', 'vacation', 'pricing'] as const).map((kind) => <button key={kind} className={activeReport === kind ? 'nav-item active' : 'nav-item'} onClick={() => chooseReport(kind)}><span className="nav-icon">{kind === 'overview' ? 'OV' : kind === 'lane' ? 'LP' : kind === 'customer' ? 'CI' : kind === 'fleet' ? 'FR' : kind === 'vacation' ? 'VB' : '$'}</span><span><strong>{reports[kind].title}</strong><small>{kind === 'overview' ? 'Morning brief' : kind === 'lane' ? 'PDF analysis' : kind === 'customer' ? 'Excel billing' : kind === 'fleet' ? 'CSV + chart' : kind === 'vacation' ? 'CSV export' : 'Sales targets'}</small></span></button>)}</nav></div><div className="source-card"><span className="source-icon">DB</span><div><strong>SQLite demo mode</strong><p>Synthetic records exercise the complete reporting workflow.</p></div></div></aside>
+        <aside className="report-nav" aria-label="Reports"><div><p className="nav-label">Reports</p><nav>{(['overview', 'lane', 'customer', 'fleet', 'vacation', 'pricing'] as const).map((kind) => <button key={kind} className={activeReport === kind ? 'nav-item active' : 'nav-item'} onClick={() => chooseReport(kind)}><span className="nav-icon">{kind === 'overview' ? 'OV' : kind === 'lane' ? 'LP' : kind === 'customer' ? 'CI' : kind === 'fleet' ? 'FR' : kind === 'vacation' ? 'VB' : '$'}</span><span><strong>{reports[kind].title}</strong><small>{kind === 'overview' ? 'Morning brief' : kind === 'lane' ? 'PDF analysis' : kind === 'customer' ? 'Excel billing' : kind === 'fleet' ? 'CSV + chart' : kind === 'vacation' ? 'CSV export' : 'Sales targets'}</small></span></button>)}</nav></div><div className="source-card"><span className="source-icon">DB</span><div><strong>{dataSourceTitle}</strong><p>{dataSourceDescription}</p></div></div></aside>
         <div className="content-area">
           <div className="content-header"><div><p className="eyebrow">{report.eyebrow}</p><h1>{report.title}</h1><p className="lede">{report.description}</p></div><span className="format-chip">{report.format}</span></div>
-          {activeReport === 'overview' && <OwnerOverview apiBase={apiBase} />}
+          {activeReport === 'overview' && <OwnerOverview apiBase={apiBase} productionMode={productionMode} />}
           {activeReport === 'pricing' && <div className="generator-card"><LoadPricingCalculator /></div>}
-          {activeReport === 'vacation' && <VacationReport apiBase={apiBase} />}
-          {(['lane', 'customer', 'fleet'] as const).includes(activeReport as 'lane' | 'customer' | 'fleet') && <ReportGenerator activeReport={activeReport as 'lane' | 'customer' | 'fleet'} report={report} startDate={startDate} endDate={endDate} invoiceEndDate={invoiceEndDate} invoiceNumber={invoiceNumber} expectedTotal={expectedTotal} billingDates={billingDates} billingDatesLoading={billingDatesLoading} fleetGranularity={fleetGranularity} loading={loading} previewExists={Boolean(preview)} error={error} success={success} setStartDate={setStartDateAndReset} setEndDate={setEndDateAndReset} setInvoiceEndDate={setInvoiceEndDateAndReset} setInvoiceNumber={setInvoiceNumber} setExpectedTotal={setExpectedTotal} handlePrimaryAction={handlePrimaryAction} selectBillingDate={(billDate) => void selectBillingDate(billDate)} changeFleetGranularity={(granularity) => void changeFleetGranularity(granularity)} />}
+          {vacationLocked && <VacationAccessGate apiBase={apiBase} onUnlock={unlockVacationView} />}
+          {activeReport === 'vacation' && productionMode && vacationUnlocked && <div className="revenue-access-status"><span><b>Vacation view unlocked</b><small>Protected employee balance APIs are available in this tab.</small></span><button type="button" onClick={lockVacationView}>Lock</button></div>}
+          {activeReport === 'vacation' && !vacationLocked && <VacationReport apiBase={apiBase} accessPassword={vacationAccessPassword} onAccessDenied={lockVacationView} />}
+          {fleetRevenueLocked && <RevenueAccessGate apiBase={apiBase} onUnlock={unlockRevenueView} />}
+          {activeReport === 'fleet' && productionMode && revenueUnlocked && <div className="revenue-access-status"><span><b>Revenue view unlocked</b><small>Protected financial APIs are available in this tab.</small></span><button type="button" onClick={lockRevenueView}>Lock</button></div>}
+          {!fleetRevenueLocked && (['lane', 'customer', 'fleet'] as const).includes(activeReport as 'lane' | 'customer' | 'fleet') && <ReportGenerator activeReport={activeReport as 'lane' | 'customer' | 'fleet'} report={report} startDate={startDate} endDate={endDate} invoiceEndDate={invoiceEndDate} invoiceNumber={invoiceNumber} expectedTotal={expectedTotal} billingDates={billingDates} billingDatesLoading={billingDatesLoading} fleetGranularity={fleetGranularity} fleetAccounts={fleetAccounts} apiBase={apiBase} revenueAccessPassword={revenueAccessPassword} loading={loading} previewExists={Boolean(preview)} error={error} success={success} setStartDate={setStartDateAndReset} setEndDate={setEndDateAndReset} setInvoiceEndDate={setInvoiceEndDateAndReset} setInvoiceNumber={setInvoiceNumber} setExpectedTotal={setExpectedTotal} handlePrimaryAction={handlePrimaryAction} selectBillingDate={(billDate) => void selectBillingDate(billDate)} changeFleetGranularity={(granularity) => void changeFleetGranularity(granularity)} changeFleetAccounts={changeFleetAccounts} onRevenueAccessDenied={lockRevenueView} />}
           {activeReport === 'customer' && preview && <CustomerReview preview={preview} editMode={editMode} setEditMode={setEditMode} includedOrders={includedOrders} reviewedTotal={reviewedTotal} expected={expected} variance={variance} loading={loading} money={money} updateOrder={updateOrder} generateReviewedInvoice={() => void generateReviewedInvoice()} />}
           {activeReport === 'fleet' && fleetPreview && <FleetReportPanel preview={fleetPreview} granularity={fleetGranularity} loading={loading} money={money} percent={percent} downloadFleetFile={(format) => void downloadFleetFile(format)} />}
-          {!preview && !fleetPreview && activeReport !== 'pricing' && activeReport !== 'overview' && <div className="details-row"><article><span className="detail-number">01</span><div><h3>Replaceable data layer</h3><p>The public build queries a seeded SQLite database through the same repository boundary used in production.</p></div></article><article><span className="detail-number">02</span><div><h3>Review before download</h3><p>Verify orders and totals before creating the billing file.</p></div></article></div>}
+          {!fleetRevenueLocked && !preview && !fleetPreview && activeReport !== 'pricing' && activeReport !== 'overview' && <div className="details-row"><article><span className="detail-number">01</span><div><h3>{productionMode ? 'Read-only reporting' : 'Replaceable data layer'}</h3><p>{productionMode ? 'This local session is connected to the live reporting source and cannot change records.' : 'The public build queries a seeded SQLite database through the same repository boundary used in production.'}</p></div></article><article><span className="detail-number">02</span><div><h3>Review before download</h3><p>Verify orders and totals before creating the billing file.</p></div></article></div>}
         </div>
       </section>
     </main>

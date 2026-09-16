@@ -1,6 +1,18 @@
-import type { FleetGranularity, FleetPeriod } from './components/FleetPerformanceChart';
+import type { FleetCostCategory, FleetGranularity, FleetPeriod } from './components/FleetPerformanceChart';
 
 export type ReportKind = 'overview' | 'lane' | 'customer' | 'fleet' | 'vacation' | 'pricing';
+
+export type FleetCostAccount = {
+  gl_account: string;
+  label: string;
+  account_type: string;
+};
+
+export type FleetCostAccountSearch = {
+  query: string;
+  default_accounts: FleetCostAccount[];
+  accounts: FleetCostAccount[];
+};
 
 export type FleetPreview = {
   start_date: string;
@@ -15,7 +27,7 @@ export type FleetPreview = {
     fleet_cost_pct_revenue: number | null;
     revenue_per_fleet_cost: number | null;
   };
-  cost_categories: { gl_account: string; label: string; source_amount: number }[];
+  cost_categories: FleetCostCategory[];
   periods: FleetPeriod[];
   methodology: string;
 };

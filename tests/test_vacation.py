@@ -14,6 +14,9 @@ def test_vacation_preview_returns_synthetic_rows() -> None:
     assert payload["employee_count"] > 0
     assert payload["total_amount_due"] > 0
     assert {row["employee_group"] for row in payload["rows"]} == {"Drivers", "Office"}
+    assert [row["company_id"] for row in payload["rows"]] == [
+        "TMS", "TMS", "TMS2", "TMS2", "TMS3", "TMS3", "TMS4", "TMS4", "DRIVERS", "DRIVERS"
+    ]
 
 
 def test_vacation_csv_has_download_headers_and_columns() -> None:

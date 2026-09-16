@@ -91,3 +91,44 @@ def test_alerts_use_centralized_thresholds(monkeypatch) -> None:
 
     assert len(alerts) == 1
     assert "95%" in alerts[0]["detail"]
+
+
+def test_operations_overview_uses_configured_source_roster(monkeypatch) -> None:
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: type("Settings", (), {
+            "data_mode": "production",
+            "overview_manager_teams": "felicia:OTR,patrick:Local",
+        })(),
+    )
+    monkeypatch.setattr(
+        service,
+        "fetch_operations_performance",
+        lambda start_date, end_date: [
+            performance_row("felicia", 1_000, 100),
+            performance_row("patrick", 800, 80),
+        ],
+    )
+    monkeypatch.setattr(
+        service,
+        "fetch_operations_tractors",
+        lambda: [
+            {"manager_id": "felicia", "manager_name": "FELICIA MCMICHAEL", "assigned_trucks": 34, "seated_trucks": 32},
+            {"manager_id": "patrick", "manager_name": "PATRICK ADAIR", "assigned_trucks": 29, "seated_trucks": 26},
+        ],
+    )
+    monkeypatch.setattr(
+        service,
+        "fetch_operations_fleet_status",
+        lambda: {"active_fleet": 63, "seated_tractors": 58},
+    )
+
+    overview = service.build_operations_overview(date(2026, 8, 28))
+
+    assert [manager["manager_id"] for manager in overview["managers"]] == [
+        "felicia", "patrick"
+    ]
+    assert overview["managers"][0]["name"] == "Felicia Mcmichael"
+    assert overview["managers"][0]["week"]["total_miles"] == 1_000
+    assert overview["summary"]["otr_assigned_trucks"] == 34

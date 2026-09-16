@@ -21,6 +21,17 @@ from app.models import DailyRevenue, FleetCostEntry
 
 Granularity = Literal["day", "week", "month"]
 
+COST_COLORS = (
+    "#DF6B20",
+    "#C7902F",
+    "#60788F",
+    "#8A5A44",
+    "#8397A8",
+    "#B85A3B",
+    "#3E668D",
+    "#A8835C",
+)
+
 
 @dataclass(frozen=True)
 class FleetCostCategory:
@@ -31,7 +42,8 @@ class FleetCostCategory:
 # Cost categories come from configuration so the public repo stays free of
 # real GL account numbers. Demo default matches the seeded SQLite data; a
 # production .env sets the company accounts, e.g. FLEET_COST_CATEGORIES=51601000:Fleet lease
-def _load_cost_categories() -> tuple[FleetCostCategory, ...]:
+def load_default_cost_categories() -> tuple[FleetCostCategory, ...]:
+    """Parse the default account stack from application configuration."""
     categories: list[FleetCostCategory] = []
     for pair in get_settings().fleet_cost_categories.split(","):
         pair = pair.strip()
@@ -43,9 +55,6 @@ def _load_cost_categories() -> tuple[FleetCostCategory, ...]:
                 FleetCostCategory(account.strip(), (label or account).strip())
             )
     return tuple(categories) or (FleetCostCategory("FLEET_LEASE", "Fleet lease"),)
-
-
-FLEET_COST_CATEGORIES = _load_cost_categories()
 
 
 def _as_date(value: date | datetime) -> date:
@@ -69,12 +78,12 @@ def _period_bounds(value: date, granularity: Granularity) -> tuple[date, date]:
 
 
 def _short_date(value: date) -> str:
-    return f'{value.strftime("%b")} {value.day}'
+    return f"{value.strftime('%b')} {value.day}"
 
 
 def _period_label(start: date, end: date, granularity: Granularity) -> str:
     if granularity == "day":
-        return f'{start.strftime("%b")} {start.day}, {start.year}'
+        return f"{start.strftime('%b')} {start.day}, {start.year}"
     if granularity == "month":
         return start.strftime("%B %Y")
     return f"{_short_date(start)}–{_short_date(end)}"
@@ -119,32 +128,29 @@ def _build_periods(
             "order_count": 0,
             "revenue": 0.0,
             "allocated_fleet_cost": 0.0,
+            "cost_by_account": {},
         }
         cursor = period_end + timedelta(days=1)
     return periods
 
 
-def _reconcile_cost_rounding(periods: OrderedDict[date, dict]) -> list[float]:
-    """Round period costs to cents without losing the original GL total."""
+def _reconcile_currency_values(values: list[float]) -> list[float]:
+    """Round allocated values to cents without losing their original total."""
     # Daily proration creates fractional cents. Spread the rounding pennies over
-    # contributing periods so displayed rows add back to the source GL amount.
-    allocated_total = round(
-        sum(period["allocated_fleet_cost"] for period in periods.values()), 2
-    )
-    rounded_costs = [
-        round(period["allocated_fleet_cost"], 2) for period in periods.values()
-    ]
-    rounding_delta = round(allocated_total - sum(rounded_costs), 2)
+    # contributing periods so displayed rows add back to the allocated amount.
+    allocated_total = round(sum(values), 2)
+    rounded_values = [round(value, 2) for value in values]
+    rounding_delta = round(allocated_total - sum(rounded_values), 2)
     if rounding_delta:
-        eligible_indexes = [
-            index for index, cost in enumerate(rounded_costs) if cost
-        ]
+        # Use raw values to handle allocations smaller than half a cent, which
+        # may all initially round to zero even though their combined total does not.
+        eligible_indexes = [index for index, value in enumerate(values) if value]
         cents = round(rounding_delta * 100)
         cent = 0.01 if cents > 0 else -0.01
         for offset in range(abs(cents)):
             index = eligible_indexes[-1 - (offset % len(eligible_indexes))]
-            rounded_costs[index] = round(rounded_costs[index] + cent, 2)
-    return rounded_costs
+            rounded_values[index] = round(rounded_values[index] + cent, 2)
+    return rounded_values
 
 
 def _add_revenue_to_periods(
@@ -169,7 +175,9 @@ def _allocate_costs_to_periods(
     """Prorate monthly GL entries into the selected period buckets."""
     category_totals: dict[str, float] = {}
     for entry in cost_entries:
-        category_totals[entry.gl_account] = category_totals.get(entry.gl_account, 0) + entry.amount
+        category_totals[entry.gl_account] = (
+            category_totals.get(entry.gl_account, 0) + entry.amount
+        )
         transaction_date = _as_date(entry.transaction_date)
         month_start = transaction_date.replace(day=1)
         month_end = transaction_date.replace(
@@ -182,27 +190,62 @@ def _allocate_costs_to_periods(
             overlap_start = max(period["period_start"], month_start)
             overlap_end = min(period["period_end"], month_end)
             if overlap_end >= overlap_start:
-                period["allocated_fleet_cost"] += daily_cost * (
-                    (overlap_end - overlap_start).days + 1
+                allocated_amount = daily_cost * ((overlap_end - overlap_start).days + 1)
+                period["allocated_fleet_cost"] += allocated_amount
+                account_costs = period["cost_by_account"]
+                account_costs[entry.gl_account] = (
+                    account_costs.get(entry.gl_account, 0.0) + allocated_amount
                 )
     return category_totals
 
 
 def _build_period_rows(
-    periods: OrderedDict[date, dict], granularity: Granularity
+    periods: OrderedDict[date, dict],
+    granularity: Granularity,
+    cost_categories: list[dict],
 ) -> list[dict]:
-    """Finalize period values, reconcile cents, and calculate derived ratios."""
-    rounded_costs = _reconcile_cost_rounding(periods)
+    """Finalize period values and retain reconciled account-level cost segments."""
+    period_values = list(periods.values())
+    # Reconcile each account independently. This guarantees that every stacked
+    # segment adds correctly across periods and that each bar adds to its total.
+    reconciled_by_account = {
+        category["gl_account"]: _reconcile_currency_values(
+            [
+                period["cost_by_account"].get(category["gl_account"], 0.0)
+                for period in period_values
+            ]
+        )
+        for category in cost_categories
+    }
     rows = []
-    for period, fleet_cost in zip(periods.values(), rounded_costs, strict=True):
+    for index, period in enumerate(period_values):
+        cost_breakdown = [
+            {
+                "gl_account": category["gl_account"],
+                "label": category["label"],
+                "allocated_amount": reconciled_by_account[category["gl_account"]][
+                    index
+                ],
+            }
+            for category in cost_categories
+        ]
+        fleet_cost = round(sum(item["allocated_amount"] for item in cost_breakdown), 2)
         revenue = round(period["revenue"], 2)
+        public_period = {
+            key: value for key, value in period.items() if key != "cost_by_account"
+        }
         row = {
-            **period,
+            **public_period,
             "revenue": revenue,
             "allocated_fleet_cost": fleet_cost,
+            "cost_breakdown": cost_breakdown,
             "revenue_after_fleet_cost": round(revenue - fleet_cost, 2),
-            "fleet_cost_pct_revenue": round(fleet_cost / revenue, 4) if revenue else None,
-            "revenue_per_fleet_cost": round(revenue / fleet_cost, 2) if fleet_cost else None,
+            "fleet_cost_pct_revenue": round(fleet_cost / revenue, 4)
+            if revenue
+            else None,
+            "revenue_per_fleet_cost": round(revenue / fleet_cost, 2)
+            if fleet_cost
+            else None,
         }
         if granularity == "week":
             row["week_start"] = period["bucket_start"]
@@ -217,6 +260,7 @@ def analyze_fleet_cost_revenue(
     cost_entries: list[FleetCostEntry],
     daily_revenue: list[DailyRevenue],
     granularity: Granularity = "week",
+    cost_categories: tuple[FleetCostCategory, ...] | None = None,
 ) -> dict:
     """Reconcile GL fleet costs with operational revenue by requested period.
 
@@ -230,15 +274,20 @@ def analyze_fleet_cost_revenue(
     periods = _build_periods(start_date, end_date, granularity)
     _add_revenue_to_periods(periods, daily_revenue, start_date, end_date, granularity)
 
-    category_labels = {
-        category.gl_account: category.label for category in FLEET_COST_CATEGORIES
-    }
-    category_totals = {
-        category.gl_account: 0.0 for category in FLEET_COST_CATEGORIES
-    }
+    categories = cost_categories or load_default_cost_categories()
+    category_labels = {category.gl_account: category.label for category in categories}
+    category_totals = {category.gl_account: 0.0 for category in categories}
     category_totals.update(_allocate_costs_to_periods(periods, cost_entries))
     source_fleet_cost = sum(entry.amount for entry in cost_entries)
-    period_rows = _build_period_rows(periods, granularity)
+    cost_category_rows = [
+        {
+            "gl_account": account,
+            "label": category_labels.get(account, account),
+            "source_amount": round(amount, 2),
+        }
+        for account, amount in category_totals.items()
+    ]
+    period_rows = _build_period_rows(periods, granularity, cost_category_rows)
 
     total_revenue = round(sum(row["revenue"] for row in period_rows), 2)
     allocated_fleet_cost = round(
@@ -258,9 +307,7 @@ def analyze_fleet_cost_revenue(
             "revenue": total_revenue,
             "source_fleet_cost": round(source_fleet_cost, 2),
             "allocated_fleet_cost": allocated_fleet_cost,
-            "revenue_after_fleet_cost": round(
-                total_revenue - allocated_fleet_cost, 2
-            ),
+            "revenue_after_fleet_cost": round(total_revenue - allocated_fleet_cost, 2),
             "fleet_cost_pct_revenue": (
                 round(allocated_fleet_cost / total_revenue, 4)
                 if total_revenue
@@ -272,18 +319,11 @@ def analyze_fleet_cost_revenue(
                 else None
             ),
         },
-        "cost_categories": [
-            {
-                "gl_account": account,
-                "label": category_labels.get(account, account),
-                "source_amount": round(amount, 2),
-            }
-            for account, amount in category_totals.items()
-        ],
+        "cost_categories": cost_category_rows,
         "periods": period_rows,
         "weeks": period_rows if granularity == "week" else [],
         "methodology": (
-            "Revenue uses synthetic order totals by received date. "
+            "Revenue uses order totals by received date. "
             f"{granularity_copy} Monthly fleet costs are prorated by calendar day "
             "into each overlapping period."
         ),
@@ -294,6 +334,7 @@ def fleet_cost_revenue_csv(analysis: dict) -> bytes:
     """Serialize the displayed period rows into a reviewable CSV attachment."""
     output = StringIO(newline="")
     writer = csv.writer(output)
+    categories = analysis["cost_categories"]
     writer.writerow(
         [
             "Period",
@@ -303,12 +344,20 @@ def fleet_cost_revenue_csv(analysis: dict) -> bytes:
             "Order count",
             "Revenue",
             "Allocated fleet cost",
+            *[
+                f"Allocated {category['label']} (GL {category['gl_account']})"
+                for category in categories
+            ],
             "Revenue after fleet cost",
             "Fleet cost % of revenue",
             "Revenue per $1 fleet cost",
         ]
     )
     for row in analysis["periods"]:
+        breakdown = {
+            item["gl_account"]: item["allocated_amount"]
+            for item in row["cost_breakdown"]
+        }
         writer.writerow(
             [
                 row["label"],
@@ -318,11 +367,15 @@ def fleet_cost_revenue_csv(analysis: dict) -> bytes:
                 row["order_count"],
                 _csv_money(row["revenue"]),
                 _csv_money(row["allocated_fleet_cost"]),
+                *[
+                    _csv_money(breakdown.get(category["gl_account"], 0.0))
+                    for category in categories
+                ],
                 _csv_money(row["revenue_after_fleet_cost"]),
                 (
                     ""
                     if row["fleet_cost_pct_revenue"] is None
-                    else f'{row["fleet_cost_pct_revenue"]:.2%}'
+                    else f"{row['fleet_cost_pct_revenue']:.2%}"
                 ),
                 (
                     ""
@@ -333,6 +386,20 @@ def fleet_cost_revenue_csv(analysis: dict) -> bytes:
         )
     writer.writerow([])
     summary = analysis["summary"]
+    allocated_category_totals = {
+        category["gl_account"]: round(
+            sum(
+                next(
+                    item["allocated_amount"]
+                    for item in row["cost_breakdown"]
+                    if item["gl_account"] == category["gl_account"]
+                )
+                for row in analysis["periods"]
+            ),
+            2,
+        )
+        for category in categories
+    }
     writer.writerow(
         [
             "TOTAL",
@@ -342,11 +409,15 @@ def fleet_cost_revenue_csv(analysis: dict) -> bytes:
             summary["order_count"],
             _csv_money(summary["revenue"]),
             _csv_money(summary["allocated_fleet_cost"]),
+            *[
+                _csv_money(allocated_category_totals[category["gl_account"]])
+                for category in categories
+            ],
             _csv_money(summary["revenue_after_fleet_cost"]),
             (
                 ""
                 if summary["fleet_cost_pct_revenue"] is None
-                else f'{summary["fleet_cost_pct_revenue"]:.2%}'
+                else f"{summary['fleet_cost_pct_revenue']:.2%}"
             ),
             (
                 ""
@@ -373,6 +444,7 @@ def fleet_cost_revenue_csv(analysis: dict) -> bytes:
 def fleet_cost_revenue_chart(analysis: dict) -> bytes:
     """Render the cost, revenue, and margin trend used in the downloadable PNG."""
     periods = analysis["periods"]
+    categories = analysis["cost_categories"]
     labels = [row["label"] for row in periods]
     revenue = [row["revenue"] for row in periods]
     fleet_cost = [row["allocated_fleet_cost"] for row in periods]
@@ -389,15 +461,34 @@ def fleet_cost_revenue_chart(analysis: dict) -> bytes:
         revenue,
         width,
         label="Revenue",
-        color="#174D37",
+        color="#1F4F86",
     )
-    cost_bars = axis.bar(
-        [position + width / 2 for position in positions],
-        fleet_cost,
-        width,
-        label="Allocated fleet cost",
-        color="#F0C75E",
-    )
+    cost_positions = [position + width / 2 for position in positions]
+    cost_bottoms = [0.0 for _ in periods]
+    for category_index, category in enumerate(categories):
+        amounts = [
+            next(
+                (
+                    item["allocated_amount"]
+                    for item in row["cost_breakdown"]
+                    if item["gl_account"] == category["gl_account"]
+                ),
+                0.0,
+            )
+            for row in periods
+        ]
+        axis.bar(
+            cost_positions,
+            amounts,
+            width,
+            bottom=cost_bottoms,
+            label=category["label"],
+            color=COST_COLORS[category_index % len(COST_COLORS)],
+        )
+        cost_bottoms = [
+            bottom + amount
+            for bottom, amount in zip(cost_bottoms, amounts, strict=True)
+        ]
     axis.yaxis.set_major_formatter(FuncFormatter(lambda value, _: _axis_money(value)))
     tick_step = max(1, math.ceil(len(periods) / 12))
     tick_positions = positions[::tick_step]
@@ -425,18 +516,28 @@ def fleet_cost_revenue_chart(analysis: dict) -> bytes:
     percent_axis.tick_params(axis="y", labelsize=9, colors="#A14935")
 
     if len(periods) <= 12:
-        for bars in (revenue_bars, cost_bars):
-            for bar in bars:
-                axis.annotate(
-                    _money(bar.get_height()),
-                    (bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                    xytext=(0, 5),
-                    textcoords="offset points",
-                    ha="center",
-                    va="bottom",
-                    fontsize=8,
-                    color="#26312B",
-                )
+        for bar in revenue_bars:
+            axis.annotate(
+                _money(bar.get_height()),
+                (bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                xytext=(0, 5),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color="#26312B",
+            )
+        for x_position, total in zip(cost_positions, fleet_cost, strict=True):
+            axis.annotate(
+                _money(total),
+                (x_position, total),
+                xytext=(0, 5),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color="#26312B",
+            )
 
     summary = analysis["summary"]
     title_prefix = {
@@ -449,19 +550,19 @@ def fleet_cost_revenue_chart(analysis: dict) -> bytes:
         loc="left",
         fontsize=20,
         fontweight="bold",
-        color="#174D37",
+        color="#1F4F86",
         pad=22,
     )
     axis.text(
         0,
         1.02,
         (
-            f'{analysis["start_date"].strftime("%B")} '
-            f'{analysis["start_date"].day}, {analysis["start_date"].year}–'
-            f'{analysis["end_date"].strftime("%B")} '
-            f'{analysis["end_date"].day}, {analysis["end_date"].year}  |  '
-            f'{_money(summary["revenue"])} revenue  |  '
-            f'{_money(summary["allocated_fleet_cost"])} fleet cost'
+            f"{analysis['start_date'].strftime('%B')} "
+            f"{analysis['start_date'].day}, {analysis['start_date'].year}–"
+            f"{analysis['end_date'].strftime('%B')} "
+            f"{analysis['end_date'].day}, {analysis['end_date'].year}  |  "
+            f"{_money(summary['revenue'])} revenue  |  "
+            f"{_money(summary['allocated_fleet_cost'])} fleet cost"
         ),
         transform=axis.transAxes,
         fontsize=10,
@@ -475,7 +576,7 @@ def fleet_cost_revenue_chart(analysis: dict) -> bytes:
         legend_labels + percent_labels,
         loc="upper left",
         frameon=False,
-        ncol=3,
+        ncol=min(5, len(legend_labels + percent_labels)),
         bbox_to_anchor=(0, 0.96),
     )
     axis.spines[["top", "right", "left"]].set_visible(False)

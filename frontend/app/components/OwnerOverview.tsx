@@ -100,7 +100,7 @@ function metricStatus(manager: ManagerPerformance, metric: MetricName, value: nu
   return value >= goal * 0.9 ? 'watch' : 'bad';
 }
 
-export default function OwnerOverview({ apiBase }: { apiBase: string }) {
+export default function OwnerOverview({ apiBase, productionMode }: { apiBase: string; productionMode: boolean }) {
   const [view, setView] = useState<PerformanceView>('week');
   const [selectedDate, setSelectedDate] = useState(localDateValue);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
@@ -138,7 +138,7 @@ export default function OwnerOverview({ apiBase }: { apiBase: string }) {
   }, [overview]);
 
   if (!overview && loading) {
-    return <section className="ops-overview ops-loading" aria-live="polite"><span /><strong>Building the morning brief from synthetic data…</strong><small>Mileage, revenue, service, and tractor status</small></section>;
+    return <section className="ops-overview ops-loading" aria-live="polite"><span /><strong>Building the morning brief from {productionMode ? 'production data' : 'synthetic data'}…</strong><small>Mileage, revenue, service, and tractor status</small></section>;
   }
 
   if (!overview) {
@@ -157,7 +157,7 @@ export default function OwnerOverview({ apiBase }: { apiBase: string }) {
           <div>
             <p className="step-label">Live morning brief</p>
             <h2 id="ops-brief-title">{displayDate(overview.report_date)}</h2>
-            <p>Generated from synthetic SQLite data at {generatedTime}. Weekly totals use the Sunday–Saturday operating window containing this date.</p>
+            <p>Generated from {productionMode ? 'production read-only data' : 'synthetic SQLite data'} at {generatedTime}. Weekly totals use the Sunday–Saturday operating window containing this date.</p>
           </div>
           <div className="ops-controls">
             <label><span>Report date</span><input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label>

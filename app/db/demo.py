@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS invoice_stops (
 CREATE TABLE IF NOT EXISTS fleet_cost_entries (
     id INTEGER PRIMARY KEY, gl_account TEXT, transaction_date TEXT, amount REAL
 );
+CREATE TABLE IF NOT EXISTS fleet_cost_accounts (
+    gl_account TEXT PRIMARY KEY, label TEXT, account_type TEXT, active INTEGER
+);
 CREATE TABLE IF NOT EXISTS daily_revenue (
     revenue_date TEXT PRIMARY KEY, order_count INTEGER, revenue REAL
 );
@@ -74,6 +77,8 @@ def connect() -> sqlite3.Connection:
         _seed(connection)
     if connection.execute("SELECT COUNT(*) FROM vacation_balances").fetchone()[0] == 0:
         _seed_vacation(connection)
+    if connection.execute("SELECT COUNT(*) FROM fleet_cost_accounts").fetchone()[0] == 0:
+        _seed_fleet_cost_accounts(connection)
     return connection
 
 
@@ -103,6 +108,31 @@ def _seed_vacation(connection: sqlite3.Connection) -> None:
             for row in rows
         ],
     )
+    connection.commit()
+
+
+def _seed_fleet_cost_accounts(connection: sqlite3.Connection) -> None:
+    """Seed searchable cost accounts and monthly postings for the demo picker."""
+    accounts = (
+        ("FLEET_LEASE", "Fleet lease", "Vehicle costs", 1),
+        ("50100001", "Driver wages", "Driver wages", 1),
+        ("51100000", "Fuel & oil", "Fuel costs", 1),
+        ("51100001", "Fuel & oil advances", "Fuel costs", 1),
+    )
+    connection.executemany(
+        "INSERT INTO fleet_cost_accounts VALUES (?, ?, ?, ?)", accounts
+    )
+    cursor = date(2025, 1, 1)
+    while cursor <= date(2027, 12, 1):
+        connection.executemany(
+            "INSERT INTO fleet_cost_entries (gl_account, transaction_date, amount) VALUES (?, ?, ?)",
+            (
+                ("50100001", str(cursor), 172_000 + cursor.month * 1_250),
+                ("51100000", str(cursor), 218_000 + cursor.month * 1_600),
+                ("51100001", str(cursor), 1_400 + cursor.month * 75),
+            ),
+        )
+        cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
     connection.commit()
 
 
